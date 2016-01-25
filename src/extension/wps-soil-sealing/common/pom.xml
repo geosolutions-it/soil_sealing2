@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-    <modelVersion>4.0.0</modelVersion>
+	<modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>org.geoserver.extension</groupId>
-        <artifactId>wps-soil-sealing</artifactId>
-        <version>2.5-SOIL_SEALING-SNAPSHOT</version>
-    </parent>
+	<parent>
+		<groupId>org.geoserver.extension</groupId>
+		<artifactId>gs-wps-soil-sealing</artifactId>
+		<version>2.5-SOIL_SEALING-SNAPSHOT</version>
+	</parent>
 
-    <groupId>org.geoserver.extension</groupId>
-    <artifactId>wps-soil-sealing-common</artifactId>
+	<groupId>org.geoserver.extension</groupId>
+	<artifactId>gs-wps-soil-sealing-common</artifactId>
 	<packaging>jar</packaging>
-    <name>Web Processing Service Soil Sealing Common WPS extension</name>
+	<name>Web Processing Service Soil Sealing Common WPS extension</name>
 
 	<dependencies>
 		<dependency>
@@ -23,35 +23,111 @@
 		</dependency>
 		<dependency>
 			<groupId>org.geoserver.extension</groupId>
-			<artifactId>wps-core</artifactId>
+			<artifactId>gs-wps-core</artifactId>
 			<version>${gs.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>org.geotools</groupId>
+			<artifactId>gt-process-raster</artifactId>
+			<version>${gt.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.geotools</groupId>
+			<artifactId>gt-coveragetools</artifactId>
+			<version>${gt.version}</version>
+		</dependency>
+		<!-- JAI-EXT dependencies -->
+		<dependency>
+			<groupId>it.geosolutions-jai-ext</groupId>
+			<artifactId>change-matrix</artifactId>
+			<version>${jaiext.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.jaitools</groupId>
+					<artifactId>jt-utils</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>it.geosolutions.jaiext.zonal</groupId>
+			<artifactId>jt-zonal</artifactId>
+			<version>${jaiext.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.jaitools</groupId>
+					<artifactId>jt-utils</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>it.geosolutions.jaiext.bandmerge</groupId>
+			<artifactId>jt-bandmerge</artifactId>
+			<version>${jaiext.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.jaitools</groupId>
+					<artifactId>jt-utils</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>it.geosolutions.jaiext.buffer</groupId>
+			<artifactId>jt-buffer</artifactId>
+			<version>${jaiext.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.jaitools</groupId>
+					<artifactId>jt-utils</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>it.geosolutions.jaiext.algebra</groupId>
+			<artifactId>jt-algebra</artifactId>
+			<version>${jaiext.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.jaitools</groupId>
+					<artifactId>jt-utils</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+			 <dependency>
+	        <groupId>org.jaitools</groupId>
+	        <artifactId>jt-utils</artifactId>
+	        <version>${jt.version}</version>
+      </dependency>
+      <dependency>
+	        <groupId>org.jaitools</groupId>
+	        <artifactId>jt-vectorbinarize</artifactId>
+	        <version>${jt.version}</version>
+      </dependency> 
 
-        <!-- test dependencies -->
-        <dependency>
-          <groupId>xmlunit</groupId>
-          <artifactId>xmlunit</artifactId>
-          <scope>test</scope>
-        </dependency>
-        <dependency>
-          <groupId>com.mockrunner</groupId>
-          <artifactId>mockrunner</artifactId>
-          <scope>test</scope>
-        </dependency>
-        <dependency>
-           <groupId>org.geoserver</groupId>
-           <artifactId>main</artifactId>
-           <version>${gs.version}</version>
-           <classifier>tests</classifier>
-           <scope>test</scope>
-        </dependency>
-        <dependency>
-           <groupId>org.geoserver.extension</groupId>
-			<artifactId>wps-core</artifactId>
-           <version>${gs.version}</version>
-           <classifier>tests</classifier>
-           <scope>test</scope>
-        </dependency>
+		<!-- test dependencies -->
+		<dependency>
+			<groupId>xmlunit</groupId>
+			<artifactId>xmlunit</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.mockrunner</groupId>
+			<artifactId>mockrunner</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.geoserver</groupId>
+			<artifactId>gs-main</artifactId>
+			<version>${gs.version}</version>
+			<classifier>tests</classifier>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.geoserver.extension</groupId>
+			<artifactId>gs-wps-core</artifactId>
+			<version>${gs.version}</version>
+			<classifier>tests</classifier>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 </project>

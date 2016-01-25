@@ -22,10 +22,9 @@
   <dependencies>
     <dependency>
       <groupId>org.geoserver</groupId>
-      <artifactId>platform</artifactId>
+      <artifactId>gs-platform</artifactId>
     </dependency>
   </dependencies>
-
 
   <build>
    <plugins>
@@ -74,9 +73,9 @@
       </modules>
     </profile>
 
-    <!-- enterprise profile, includes all modules -->
+    <!-- release profile, includes all modules -->
     <profile>
-      <id>enterprise</id>
+      <id>release</id>
 	  
 		 <modules>
 		 </modules>

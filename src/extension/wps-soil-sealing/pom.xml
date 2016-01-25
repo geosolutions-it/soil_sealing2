@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="ISO-8859-1"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -11,7 +10,7 @@
     </parent>
 
     <groupId>org.geoserver.extension</groupId>
-    <artifactId>wps-soil-sealing</artifactId>
+    <artifactId>gs-wps-soil-sealing</artifactId>
     <packaging>pom</packaging>
     <name>Web Processing Service Soil Sealing extension</name>    
 
@@ -28,13 +27,13 @@
 	  <dependencies>
         <dependency>
            <groupId>org.geoserver</groupId>
-           <artifactId>main</artifactId>
+           <artifactId>gs-main</artifactId>
            <version>${gs.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.geoserver.extension</groupId>
-            <artifactId>wps-core</artifactId>
+            <artifactId>gs-wps-core</artifactId>
             <version>${gs.version}</version>
         </dependency>
 		
@@ -64,14 +63,14 @@
         </dependency -->
         <dependency>
            <groupId>org.geoserver</groupId>
-           <artifactId>main</artifactId>
+           <artifactId>gs-main</artifactId>
            <version>${gs.version}</version>
            <classifier>tests</classifier>
            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.geoserver.extension</groupId>
-            <artifactId>wps-core</artifactId>
+            <artifactId>gs-wps-core</artifactId>
             <version>${gs.version}</version>
             <classifier>tests</classifier>
             <scope>test</scope>
@@ -99,8 +98,8 @@
 
   <modules>
 	<module>common</module>
-	<!-- module>change-matrix</module>
-	<module>soil-sealing</module -->
+    <module>wps-soil-sealing-index</module>
+    <module>wps-changematrix</module>
   </modules>
 
   <profiles>

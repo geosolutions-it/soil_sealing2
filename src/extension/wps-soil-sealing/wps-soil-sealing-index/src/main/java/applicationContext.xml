@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+
+<beans>
+	<!-- The PPIO that need to be registered into SPI because of their dependencies -->
+	<bean id="soilSealingDTOPPIO" class="org.geoserver.wps.ppio.SoilSealingPPIO" />
+
+	<!-- Register the GeoServer factory and processes -->
+	<bean id="soilSealingCLC" class="org.geoserver.wps.gs.soilsealing.SoilSealingCLCProcess">
+		<constructor-arg index="0" ref="catalog" />
+		<constructor-arg index="1" ref="geoServer" />
+	</bean>
+	
+	<bean id="soilSealingImperviousness" class="org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess">
+		<constructor-arg index="0" ref="catalog" />
+		<constructor-arg index="1" ref="geoServer" />
+	</bean>
+</beans>

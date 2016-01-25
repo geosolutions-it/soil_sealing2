@@ -241,9 +241,13 @@ public class UrbanGridProcess implements GSProcess {
             return prepareImages(referenceCoverage, nowCoverage, rois, areaPx * HACONVERTER);
             // For the indexes 9-10 Zonal Stats are calculated
         case NINTH_INDEX:
+        	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
+        	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
             return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
                     CLCProcess.THIRD_INDEX, areaPx, rois, populations, Double.valueOf(1), null);
         case TENTH_INDEX:
+        	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
+        	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
             if (coeff != null) {
                 return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
                         CLCProcess.THIRD_INDEX, areaPx, rois, populations, coeff, null);

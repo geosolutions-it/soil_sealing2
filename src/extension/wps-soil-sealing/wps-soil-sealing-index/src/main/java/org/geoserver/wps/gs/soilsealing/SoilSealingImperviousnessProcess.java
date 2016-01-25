@@ -8,6 +8,7 @@ import java.awt.image.RenderedImage;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
@@ -119,6 +120,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "admUnitSelectionType", min = 1, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
             throws IOException {
+    	
+    	int gCount=0;
+    	System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+    	
         // ///////////////////////////////////////////////
         // Sanity checks ...
         // get the original Coverages
@@ -145,7 +150,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             throw new WPSException("No Administrative Unit has been specified.");
         }
         // ///////////////////////////////////////////////
-
+        
         // ///////////////////////////////////////////////
         // SoilSealing outcome variables ...
         RenderedOp result = null;
@@ -158,7 +163,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         if (nowFilter != null)
             populations.add(new LinkedList<Integer>());
         // ///////////////////////////////////////////////
-
+        
         // ///////////////////////////////////////////////
         // Logging to WFS variables ...
         final String wsName = ciReference.getNamespace().getPrefix();
@@ -168,7 +173,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         ToFeature toFeatureProcess = new ToFeature();
         WFSLog wfsLogProcess = new WFSLog(geoserver);
         // ///////////////////////////////////////////////
-
+        
         try {
             final String referenceYear = ((IsEqualsToImpl) referenceFilter).getExpression2()
                     .toString().substring(0, 4);
@@ -190,17 +195,19 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             case 10:
                 toRasterSpace = true;
             }
-
+            
             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
             prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
                     geoCodingReference, populationReference, municipalities, rois, populations,
                     referenceYear, currentYear, referenceCrs, toRasterSpace);
 
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             // read reference coverage
             GridCoverageReader referenceReader = ciReference.getGridCoverageReader(null, null);
             ParameterValueGroup readParametersDescriptor = referenceReader.getFormat()
                     .getReadParameters();
-
+            
             // get params for this coverage and override what's needed
             Map<String, Serializable> defaultParams = ciReference.getParameters();
             GeneralParameterValue[] params = CoverageUtils.getParameters(readParametersDescriptor,
@@ -255,7 +262,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     throw new WPSException("Input Current Coverage not found");
                 }
             }
-
+            
             // //////////////////////////////////////////////////////////////////////
             // Logging to WFS ...
             // //////////////////////////////////////////////////////////////////////
@@ -298,19 +305,15 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         "There was an error while logging FeatureType into the storage.");
             }
 
+            System.out.println( ++gCount + ") S" + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             // ///////////////////////////////////////////////////////////////
             // Calling UrbanGridProcess
             // ///////////////////////////////////////////////////////////////
             List<StatisticContainer> indexValue = null;
             // CUDA PROCESS
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            //TODO WORK FROM HERE
-            if (true) {
+            long startTime = System.currentTimeMillis();
+            if (jcuda != null && jcuda) {
                 final UrbanGridCUDAProcess urbanGridProcess = new UrbanGridCUDAProcess(
                         imperviousnessReference, referenceYear, currentYear);
 
@@ -323,8 +326,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 indexValue = urbanGridProcess.execute(referenceCoverage, nowCoverage, index,
                         subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null));
             }
+    		long estimatedTime = System.currentTimeMillis() - startTime;
 
-
+    		System.out.println( ++gCount + ") E" + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+    		
             // ///////////////////////////////////////////////////////////////
             // Preparing the Output Object which will be JSON encoded
             // ///////////////////////////////////////////////////////////////
@@ -336,6 +341,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             double[][] refValues = new double[indexValue.size()][];
             double[][] curValues = (nowFilter == null ? null : new double[indexValue.size()][]);
 
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
                 refValues[i] = (statContainer.getResultsRef() != null ? statContainer
@@ -346,11 +353,12 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 i++;
             }
 
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             refValues = cleanUpValues(refValues);
             curValues = cleanUpValues(curValues);
-
+            
             String[] clcLevels = null;
-
             SoilSealingOutput soilSealingRefTimeOutput = new SoilSealingOutput(referenceName,
                     (String[]) municipalities.toArray(new String[1]), clcLevels, refValues);
             SoilSealingTime soilSealingRefTime = new SoilSealingTime(
@@ -358,6 +366,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     soilSealingRefTimeOutput);
             soilSealingIndexResult.setRefTime(soilSealingRefTime);
 
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             if (nowFilter != null) {
                 SoilSealingOutput soilSealingCurTimeOutput = new SoilSealingOutput(referenceName,
                         (String[]) municipalities.toArray(new String[1]), clcLevels, curValues);
@@ -366,11 +376,16 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         soilSealingCurTimeOutput);
                 soilSealingIndexResult.setCurTime(soilSealingCurTime);
             }
-            
+
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            // Giuliano :: The following "if" is a slow piece of code, in particular for JAVA-mode calculation of indices.
             if (index == 8) {
                 buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName,
                         defaultStyle);
             }
+            
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+            
             // //////////////////////////////////////////////////////////////////////
             // Updating WFS ...
             // //////////////////////////////////////////////////////////////////////
@@ -391,6 +406,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             output.add(feature);
 
             features = wfsLogProcess.execute(output, typeName, wsName, storeName, filter, false, new NullProgressListener());
+            
+            System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );            
+            System.out.println("Elapsed time urbanGridProcess()\t--> " + estimatedTime + " [ms] -- using cuda["+jcuda+"]");
             
             // //////////////////////////////////////////////////////////////////////
             // Return the computed Soil Sealing Index ...
@@ -472,7 +490,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             indexName = "Land Take";
             break;
         case 10:
-            indexName = "Environmental Impact of Land Take";
+            indexName = "Potential Loss of Food Supply";
             break;
         }
         

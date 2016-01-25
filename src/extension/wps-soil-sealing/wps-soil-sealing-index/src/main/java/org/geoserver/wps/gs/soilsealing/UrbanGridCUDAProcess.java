@@ -18,10 +18,14 @@ import java.awt.image.SampleModel;
 import java.awt.image.WritableRaster;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.media.jai.DataBufferDouble;
+import javax.media.jai.ImageLayout;
 import javax.media.jai.JAI;
 import javax.media.jai.LookupTableJAI;
 import javax.media.jai.PlanarImage;
@@ -45,11 +49,13 @@ import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.transform.AffineTransform2D;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
 import org.geotools.resources.image.ImageUtilities;
+import org.geotools.xml.xsi.XSISimpleTypes.DateTime;
 import org.jaitools.imageutils.ImageLayout2;
 import org.jaitools.imageutils.ROIGeometry;
 import org.opengis.geometry.MismatchedDimensionException;
 import org.opengis.metadata.spatial.PixelOrientation;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 
@@ -154,7 +160,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
 
         // Check if the Geometries must be reprojected
-        Object userData = geoms.get(0).getUserData();
+/*        Object userData = geoms.get(0).getUserData();
         if (!inRasterSpace && userData instanceof CoordinateReferenceSystem) {
             CoordinateReferenceSystem geomCRS = (CoordinateReferenceSystem) userData;
             CoordinateReferenceSystem refCRS = referenceCoverage.getCoordinateReferenceSystem();
@@ -177,12 +183,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             }
             // Otherwise only set the correct User_Data parameter
         } else if (inRasterSpace){
-            int geosize = geoms.size();
+*/          int geosize = geoms.size();
             for (int i = 0; i < geosize; i++) {
                 Geometry geo = geoms.get(i);
                 geo.setUserData(referenceCoverage.getCoordinateReferenceSystem());
             }
-        }
+//        }
 
         // Empty arrays containing the statistics results
         double[] statsRef = null;
@@ -193,14 +199,14 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
         // Loop around all the Geometries and generate a new CUDA Bean object
         try {
-            MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
+            //MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
 
                 // Populate it with Reference coverage parameters
-                populateBean(bean, true, referenceCoverage, geo, transform);
+                populateBean(bean, true, referenceCoverage, geo, null);
 
                 // Set the population values if needed
                 if (populations != null) {
@@ -210,7 +216,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
                 // Do the same for the Current Coverage if present
                 if (nowCoverage != null) {
-                    populateBean(bean, false, nowCoverage, geo, transform);
+                    populateBean(bean, false, nowCoverage, geo, null);
                     // Set the population values if needed
                     if (populations != null) {
                         Integer popCur = populations.get(1).get(counter);
@@ -228,45 +234,73 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
 
         // Calculate the index using CUDA
-        Object output = calculateCUDAIndex(index, subId, areaPx, beans, false, 10);
-
+//		System.out.println( java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+//      long startTime = System.currentTimeMillis();
+        /**
+         * 	Generalize:
+         * 		> isUrban = false/true			------------------------|
+         * 		> RADIUS [meters] = scalar		---------------------------------|
+         */
+        boolean isRural = false;// link to GUI
+        int RADIUS 		= 100;// [m] // link to GUI
+        Object output = calculateCUDAIndex(index, subId, areaPx, beans, isRural, RADIUS);
+//		long estimatedTime = System.currentTimeMillis() - startTime;
+//		System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
+		Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
+        
+		// URBAN DIFFUSION
+        if (index==7){
+        	// do new CUDA processing!
+        }
         // For index 8 calculate the final Image
-        if (index == 8) {
+        else if (index == 8) {
+        	System.out.println("rural="+isRural + " -- radius="+RADIUS+" [m]");
             List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
-            byte[][][] images = (byte[][][]) output;
-            byte[][] refData = images[0];
-            int numGeo = refData.length;
+            double[][][] images = (double[][][]) output;
+            double[][] refData = images[0];
+            int numGeo = beans.size();
             // Images to mosaic
             RenderedImage[] refImgs = new RenderedImage[numGeo];
+            ROI[] roiObjs = new ROI[numGeo];
 
+            // Giuliano tested for 91 municipalities in NAPLES and it FAILED within the following FOR loop!!
             for (int i = 0; i < numGeo; i++) {
                 CUDABean bean = beans.get(i);
-                byte[] data = refData[i];
+                double[] data = refData[i];
                 Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
                         bean.getHeight());
                 refImgs[i] = createImage(rect, data);
+                roiObjs[i] = bean.getRoiObj();
             }
+            ImageLayout layout = new ImageLayout2();
+            layout.setMinX(refRect.x);
+            layout.setMinY(refRect.y);
+            layout.setWidth(refRect.width);
+            layout.setHeight(refRect.height);
 
+            RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+            
             // Mosaic of the images
-            RenderedImage finalRef = MosaicDescriptor.create(refImgs,
-                    MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, null, new double[][] { { 0.0d } },
-                    null, null);
+            double[] background = new double[]{-1.0};
+			RenderedImage finalRef = MosaicDescriptor.create(refImgs,
+                    MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null,
+                    background, hints);
 
-            // RenderedImageBrowser.showChain(finalRef, false, false);
+             //RenderedImageBrowser.showChain(finalRef, false, false);
 
             // Upgrade of the statistics container
             stats.setReferenceImage(finalRef);
             // Check if the same calculations must be done for the Current coverage
             if (nowCoverage != null) {
-                byte[][] curData = images[1];
-                byte[][] diffData = images[2];
+                double[][] curData = images[1];
+                double[][] diffData = images[2];
                 RenderedImage[] currImgs = new RenderedImage[numGeo];
                 RenderedImage[] diffImgs = new RenderedImage[numGeo];
                 for (int i = 0; i < numGeo; i++) {
                     CUDABean bean = beans.get(i);
-                    byte[] data = curData[i];
-                    byte[] diff = diffData[i];
+                    double[] data = curData[i];
+                    double[] diff = diffData[i];
                     Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
                             bean.getHeight());
                     currImgs[i] = createImage(rect, data);
@@ -274,20 +308,26 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 }
                 // Mosaic of the images
                 RenderedImage finalCurr = MosaicDescriptor.create(currImgs,
-                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, null,
-                        new double[][] { { 0.0d } }, null, null);
+                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null,
+                        roiObjs, null, background, hints);
 
                 // Mosaic of the images
                 RenderedImage finalDiff = MosaicDescriptor.create(diffImgs,
-                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, null,
-                        new double[][] { { 0.0d } }, null, null);
+                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null,
+                        roiObjs, null, background, hints);
                 // Update the statistics container
                 stats.setNowImage(finalCurr);
                 stats.setDiffImage(finalDiff);
             }
             results.add(stats);
             return results;
-        } else {
+        }
+        else if (index == 9) {// LAND TAKE
+            double[][] values = (double[][]) output;
+            statsRef = values[0];
+            statsNow = values.length > 1 ? values[1] : null;
+        }
+        else {
             double[][] values = (double[][]) output;
             statsRef = values[0];
             statsNow = values.length > 1 ? values[1] : null;
@@ -311,59 +351,128 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @param beans
      */
     private Object calculateCUDAIndex(int index, String subId, double areaPx, List<CUDABean> beans,
-            boolean rural, int rayIndex) {
-        // Possible solution
+            boolean rural, int ray_meters) {
+        /*	NOTES:
+         * 		(1)	I don't like numeric index, because we might change order (or whatever).
+         * 			A string index might be more general.
+         * 		(2)	We need to define how to pass the correct year when 1 year (ref or curr)
+         * 			is selected from within the MapStore GUI.
+         * 			I think that one solution could be to delete the for loop on n_years, 
+         * 			and call once fragmentation code using one of 1/2/3 (1:ref; 2:curr; 3:diff)
+         * 			(when 3:diff is passed, JCuda has to launch the set of kernels 3 times, so it
+         * 			
+         * 		(3) We have to pass in input the sub-index value, in order to compute the correct
+         * 			7th index (and delete subId_tmp accordingly).
+         */
 
-        // FOR INDEX 8 I WOULD EXPECT A MATRIX 3 x N_GEOMETRIES X (IMAGE DATA)
-        // WHERE LINE 0 == REFERENCE TIME DATA
-        // LINE 1 == CURRENT TIME DATA
-        // LINE 2 == DIFFERENCE BETWEEN THE OTHER DATA
+        // FOR INDEX 8 I WOULD EXPECT A MATRIX 1/3 x N_GEOMETRIES X (IMAGE DATA)
+        // WHERE
+    	// 	LINE 0 == REFERENCE TIME DATA
+        // 	LINE 1 == CURRENT TIME DATA
+        // 	LINE 2 == DIFFERENCE BETWEEN THE OTHER DATA
         // MATRIX DATA TYPE SHOULD BE BYTE
-        if (index == 8) {
-            int numbean = beans.size();
-            int numTimes = beans.get(0).getCurrentImage() != null ? 3 : 1;
-            // byte[] newData = beans.get(0).getReferenceImage();
+    	
+    	/**	Change as required
+    	 */
+    	// number of administrative units:
+    	int n_adm_units 	= beans.size();
+        int n_years 		= beans.get(0).getCurrentImage() != null ? 2 : 1;
+    	int CELLSIZE 		= (int)Math.sqrt(areaPx);//beans.get(0).
+    	int ray_pixels 		= ray_meters/CELLSIZE;
+        double[][][] result = new double[n_adm_units][3][];
+    	
+        // I WOULD EXPECT A 2 X N_GEOMETRIS MATRIX
+        // WHERE LINE 0 == INDEX VALUES FOR REFERENCE TIME
+        // WHERE LINE 1 == INDEX VALUES FOR CURRENT TIME
+        //double[][] result = new double[n_adm_units][n_years];
+        //if (n_years == 2) {
+        //	some cuda code
+    	//}
+        	switch( index ){
 
-            byte[][][] result = new byte[numTimes][numbean][];
-            for (int i = 0; i < numTimes; i++) {
-                for (int j = 0; j < numbean; j++) {
-                    byte[] newData = null;
-                    if (i == 0) {
-                        newData = beans.get(j).getReferenceImage();
-                    } else {
-                        newData = beans.get(j).getCurrentImage();
+        		// ------- CORINE LAND COVER -------
+        		case 1:  // coverage coefficient
+        			System.out.println("Not yet implemented");
+        			return null;
+        			
+        		case 2:  // rate of change
+        			System.out.println("Not yet implemented");
+        			return null;
+        			
+        		case 3:  // marginal land take
+        			System.out.println("Not yet implemented");
+        			return null;
+        			
+        		case 4:  // urban sprawl
+        			System.out.println("Not yet implemented");
+        			return null;
+        		
+        		// ------- IMPERVIOUSNESS ------- 	
+        		case 5:  // urban sprawl [ccl+sum(hist(~polyMax))]
+        			//result[i] = CUDAClass.urban_sprawl( beans, rural, areaPx, rayIndex );
+        			return null;
+        		case 6:  // edge density [perimeter]
+        			//result[i] = CUDAClass.edge_density( beans, rural, areaPx, rayIndex );
+        			return null;
+        		case 7:  // urban diffusion
+        			if(subId.equalsIgnoreCase("a")){ 		// urban_area [reduction]* --> a modification from original occurred!
+        				//result[i] = CUDAClass.urban_area( beans, rural, areaPx, rayIndex );
+        			}else if(subId.equalsIgnoreCase("b")){	// area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
+        				//result[i] = CUDAClass.Pmax_area( beans, rural, areaPx, rayIndex );
+        			}else if(subId.equalsIgnoreCase("c")){	// average area of other polygons [ccl+hist]
+        				//result[i] = CUDAClass.Pother_Marea( beans, rural, areaPx, rayIndex );
+        			}
+        			return null;
+        		case 8:  // FRAGMENTATION [myFragProg]
+                    //double[][][] result = new double[n_adm_units][3][];
+        			/*
+        			 * result = [admin(i)] [year=3] [maplen=HEIGHT(i)*WIDTH(i)]
+        			 */
+                    // loop for each administrative unit
+                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
+                    	// number of grids per admin_unit to give in output:
+                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
+                    		result[j][i]  = CUDAClass.fragmentation( beans, rural, areaPx, ray_pixels, i, j );
+                        }
+                    	if (n_years>1){
+                    		result[j][2] = result[j][1];
+        /*                	for(int ii=0;ii<beans.get(j).width*beans.get(j).height;ii++){
+                        		result[j][n_years][ii] = result[j][1][ii]-result[j][0][ii];
+                        	}*/
+                    	}
+        			}
+                    return result;
+        		case 9:	 // LAND TAKE
+        			/*	IMPORTANT:
+        			 * 		1.\ I have to add ROI in computation 
+        			 * result = [admin(i)] [0] [maplen=HEIGHT(i)*WIDTH(i)]
+        			 * 			[admin(i)] [1] [Counts=4]
+        			 */
+                    // loop for each administrative unit
+                    for (int j = 0; j < n_adm_units; j++) {
+                    	final List<double[]> resultCuda = CUDAClass.land_take( beans, areaPx, j );
+                    	// rearrange to fit the middleware process and GUI code requirements----
+                    	result[j][0] = resultCuda.get(0);// MAP
+                    	result[j][1] = resultCuda.get(1);// COUNTS "+1" (in m2) --> transform in [ha]
+                    	result[j][2] = resultCuda.get(1);// COUNTS "-1" (in m2) --> transform in [ha]
+                    	//---------
                     }
-                    result[i][j] = newData;
-                }
-            }
-            return result;
-        } else {
-            // FOR INDEXES (NOT 8 INDEX)
-            // I WOULD EXPECT A 2 X N_GEOMETRIS MATRUX
-            // WHERE LINE 0 == INDEX VALUES FOR REFERENCE TIME
-            // WHERE LINE 1 == INDEX VALUES FOR CURRENT TIME
-            int numbean = beans.size();
-            int numTimes = beans.get(0).getCurrentImage() != null ? 2 : 1;
-            double[][] output = new double[numTimes][numbean];
-            for (int i = 0; i < numbean; i++) {
-                output[0][i] = calculateCUDAStats(index, subId, areaPx, beans.get(i));
-                if (numTimes == 2) {
-                    output[1][i] = calculateCUDAStats(index, subId, areaPx, beans.get(i));
-                }
-            }
-            return output;
-        }
-    }
-
-    /**
-     * Example method for calculating Statistics from the input CUDABean
-     * 
-     * @param cudaBean
-     * @return
-     */
-    private double calculateCUDAStats(int index, String subId, double areaPx, CUDABean cudaBean) {
-        // TODO Auto-generated method stub
-        return 1.0d;
+        			return result;
+        		case 10: // potential loss of food supply
+        			/*
+        			 * result = [admin(i)] [0] [maplen=HEIGHT(i)*WIDTH(i)]
+        			 * 			[admin(i)] [1] [Counts=4]
+        			 */
+        			//result[i] = CUDAClass.potloss_foodsupply( beans, rural, areaPx, rayIndex );
+                    for (int j = 0; j < n_adm_units; j++) {
+                    	// rearrange to fit the middleware process and GUI code requirements----
+                    	// COUNTS (in m2) --> transform in [ha]
+                    	result[j][0] = CUDAClass.potloss_foodsupply(beans, areaPx, j);
+                    	//---------
+                    }
+        			return result;
+        	}
+		return null;
     }
 
     /**
@@ -383,7 +492,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             MismatchedDimensionException, TransformException {
         // 1) Crop the two coverages with the selected Geometry
         GridCoverage2D crop = CROP.execute(coverage, geo, null);
-
+        transform = ProjectiveTransform.create((AffineTransform)crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER)).inverse();
         // 2) Extract the BufferedImage from each image
         RenderedImage image = crop.getRenderedImage();
         Rectangle rectIMG = new Rectangle(image.getMinX(), image.getMinY(), image.getWidth(),
@@ -407,6 +516,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             // 5) Extract an array of data from the transformed ROI
             byte[] roiData = getROIData(roiGeo, rectIMG);
             bean.setRoi(roiData);
+            bean.setRoiObj(roiGeo);
 
             // 6) Setting the Coverage data array
             bean.setReferenceImage(byteData);
@@ -475,12 +585,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @param data
      * @return
      */
-    private RenderedImage createImage(Rectangle rect, final byte[] data) {
+    private RenderedImage createImage(Rectangle rect, final double[] data) {
         // Definition of the SampleModel
-        final SampleModel sm = new PixelInterleavedSampleModel(DataBuffer.TYPE_BYTE, rect.width,
+        final SampleModel sm = new PixelInterleavedSampleModel(DataBuffer.TYPE_DOUBLE, rect.width,
                 rect.height, 1, rect.width, new int[] { 0 });
         // DataBuffer containing input data
-        final DataBufferByte db1 = new DataBufferByte(data, rect.width * rect.height);
+        final DataBufferDouble db1 = new DataBufferDouble(data, rect.width * rect.height);
         // Writable Raster used for creating the BufferedImage
         final WritableRaster wr = com.sun.media.jai.codecimpl.util.RasterFactory
                 .createWritableRaster(sm, db1, new Point(0, 0));
@@ -503,19 +613,19 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      */
     static class CUDABean {
         /** Reference Coverage data array */
-        private byte[] referenceImage;
+        byte[] referenceImage;
 
         /** Current Coverage data array */
         private byte[] currentImage;
 
         /** ROI data array */
-        private byte[] roi;
+        byte[] roi;
 
         /** Image Width */
-        private int width;
+        int width;
 
         /** Image Height */
-        private int height;
+        int height;
 
         /** Reference value for population */
         private Integer popRef;
@@ -528,6 +638,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
         /** Image minY value */
         private int minY;
+        
+        /** ROI value */
+        private ROI roiObj;
 
         public byte[] getReferenceImage() {
             return referenceImage;
@@ -600,5 +713,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         public int getMinY() {
             return minY;
         }
+
+		public ROI getRoiObj() {
+			return roiObj;
+		}
+
+		public void setRoiObj(ROI roiObj) {
+			this.roiObj = roiObj;
+		}
     }
 }

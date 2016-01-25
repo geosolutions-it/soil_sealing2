@@ -907,15 +907,18 @@ public class ChangeMatrixProcess implements GSProcess {
             private List<int[]> JCudaChangeMat(byte[] host_iMap1, byte[] host_iMap2,
                     byte[] host_roiMap, int numclasses, int imWidth, int imHeight) {
                 /*
-                 * Copyright 2013 Massimo Nicolazzo & Giuliano Langella: ---- completed ---- (1) kernel-1 --->{oMap, tiled changeMat} (2) kernel-2
-                 * --->{changeMat}
+                 * Copyright 2013 Massimo Nicolazzo & Giuliano Langella: ---- completed ----
+                 * 	(1) kernel-1 --->{oMap, tiled changeMat}
+                 * 	(2) kernel-2 --->{changeMat}
                  */
 
                 /**
-                 * This uses the JCuda driver bindings to load and execute two CUDA kernels: (1) The first kernel executes the change matrix
-                 * computation for the whole ROI given as input in the form of iMap1 & iMap2. It returns a 3D change matrix in which every 2D array
-                 * corresponds to a given CUDA-tile (not GIS-tile). (2) The second kernel sum up the 3D change matrix returning one 2D array being the
-                 * accountancy for the whole ROI.
+                 * This uses the JCuda driver bindings to load and execute two CUDA kernels:
+                 * (1) The first kernel executes the change matrix computation for the whole
+                 * ROI given as input in the form of iMap1 & iMap2. It returns a 3D change
+                 * matrix in which every 2D array corresponds to a given CUDA-tile (not GIS-tile).
+                 * (2) The second kernel sum up the 3D change matrix returning one 2D array
+                 * being the accountancy for the whole ROI.
                  */
 
                 // Enable exceptions and omit all subsequent error checks

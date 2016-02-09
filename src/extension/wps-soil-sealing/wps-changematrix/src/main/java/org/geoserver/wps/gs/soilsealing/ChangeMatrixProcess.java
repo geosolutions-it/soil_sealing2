@@ -46,6 +46,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -89,6 +90,8 @@ import org.geoserver.wps.gs.ImportProcess;
 import org.geoserver.wps.gs.ToFeature;
 import org.geoserver.wps.gs.WFSLog;
 import org.geoserver.wps.ppio.FeatureAttribute;
+import org.geotools.coverage.Category;
+import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridCoverageFactory;
 import org.geotools.coverage.grid.GridGeometry2D;
@@ -119,6 +122,7 @@ import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.geotools.resources.image.ImageUtilities;
 import org.geotools.util.NullProgressListener;
 import org.jaitools.imageutils.ImageLayout2;
+import org.opengis.coverage.grid.GridCoverage;
 import org.opengis.coverage.grid.GridCoverageReader;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.filter.Filter;
@@ -458,9 +462,18 @@ public class ChangeMatrixProcess implements GSProcess {
              */
             // hints for tiling
             final Hints hints = GeoTools.getDefaultHints().clone();
-
+            
+            // build the output sample dimensions, use the default value ( 0 ) as the no data
+            final GridSampleDimension outSampleDimension = new GridSampleDimension("classification",
+                    new Category[] { Category.NODATA }, null).geophysics(true);
+            
             final GridCoverage2D retValue = new GridCoverageFactory(hints).create(rasterName,
-                    result, referenceCoverage.getEnvelope());
+                    result, referenceCoverage.getEnvelope(), 
+                    new GridSampleDimension[] { outSampleDimension },
+                    new GridCoverage[] { referenceCoverage }, new HashMap<String,Double>(){{
+                        put("GC_NODATA", 0d);
+                      }});
+            
             /**
              * Add Overviews...
              */

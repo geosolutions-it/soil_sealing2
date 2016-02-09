@@ -191,7 +191,9 @@ public class UrbanGridProcess implements GSProcess {
             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
-            @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff) {
+            @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
+            @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) {
 
         // Check on the index 7
         boolean nullSubId = subId == null || subId.isEmpty();
@@ -220,7 +222,8 @@ public class UrbanGridProcess implements GSProcess {
         // Simple class set used for the raster calculations on indexes 7a-9-10
         Set<Integer> classes = new TreeSet<Integer>();
         classes.add(Integer.valueOf(1));
-        // Selection of the operation to do for each index
+        List<List<Integer>> constantMatrix = null;
+		// Selection of the operation to do for each index
         switch (index) {
         case FIFTH_INDEX:
             area = true;
@@ -243,14 +246,31 @@ public class UrbanGridProcess implements GSProcess {
         case NINTH_INDEX:
         	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
         	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
+            /*return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
+                    CLCProcess.THIRD_INDEX, areaPx, rois, populations, Double.valueOf(1), null);*/
+        	
+        	// AF: Task-B36; This index should not be relative to the population.
+        	if (populations == null) {
+        		constantMatrix = GetConstFilledMatrix(2, 1, Integer.valueOf(1));
+        	} else {
+        		constantMatrix = GetConstFilledMatrix(populations.size(), populations.get(0).size(), Integer.valueOf(1));
+        	}
             return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                    CLCProcess.THIRD_INDEX, areaPx, rois, populations, Double.valueOf(1), null);
+                    CLCProcess.THIRD_INDEX, areaPx, rois, constantMatrix, Double.valueOf(1), null);
         case TENTH_INDEX:
         	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
         	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
             if (coeff != null) {
-                return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                        CLCProcess.THIRD_INDEX, areaPx, rois, populations, coeff, null);
+                /*return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
+                        CLCProcess.THIRD_INDEX, areaPx, rois, populations, coeff, null);*/
+            	// AF: Task-B40; This index should not be relative to the population.
+            	if (populations == null) {
+            		constantMatrix = GetConstFilledMatrix(2, 1, Integer.valueOf(1));
+            	} else {
+            		constantMatrix = GetConstFilledMatrix(populations.size(), populations.get(0).size(), Integer.valueOf(1));
+            	}
+            	return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
+                        CLCProcess.THIRD_INDEX, areaPx, rois, constantMatrix, coeff, null);
             } else {
                 throw new IllegalArgumentException("No coefficient provided for the selected index");
             }
@@ -283,7 +303,20 @@ public class UrbanGridProcess implements GSProcess {
 
     }
 
-    /**
+    private List<List<Integer>> GetConstFilledMatrix(int size, int size2,
+			Integer value) {
+		final List<List<Integer>> constMatrix = new ArrayList<List<Integer>>();
+		final Integer[] fill = new Integer[size2]; 
+		Arrays.fill(fill, value);
+		
+		for(int i=0; i<size; i++) {
+			constMatrix.add(Arrays.asList(fill));
+		}
+    	
+		return constMatrix;
+	}
+
+	/**
      * Takes the in input the result for each Coverage and return the result as a List of {@link StatisticContainer} objects.
      * 
      * @param rois input geometries used for calculations

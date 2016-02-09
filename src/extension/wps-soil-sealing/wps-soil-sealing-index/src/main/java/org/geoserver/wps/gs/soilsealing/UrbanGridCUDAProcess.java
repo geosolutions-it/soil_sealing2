@@ -1,7 +1,5 @@
 package org.geoserver.wps.gs.soilsealing;
 
-import it.geosolutions.rendered.viewer.RenderedImageBrowser;
-
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -10,7 +8,6 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferInt;
 import java.awt.image.PixelInterleavedSampleModel;
 import java.awt.image.Raster;
 import java.awt.image.RenderedImage;
@@ -18,8 +15,6 @@ import java.awt.image.SampleModel;
 import java.awt.image.WritableRaster;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -45,19 +40,20 @@ import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeResult;
 import org.geotools.process.gs.GSProcess;
 import org.geotools.process.raster.CropCoverage;
-import org.geotools.referencing.CRS;
-import org.geotools.referencing.operation.transform.AffineTransform2D;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
 import org.geotools.resources.image.ImageUtilities;
-import org.geotools.xml.xsi.XSISimpleTypes.DateTime;
 import org.jaitools.imageutils.ImageLayout2;
 import org.jaitools.imageutils.ROIGeometry;
 import org.opengis.geometry.MismatchedDimensionException;
 import org.opengis.metadata.spatial.PixelOrientation;
-import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
+
+import thrust.ThrustTest;
+import thrust.ThrustTest.IntDeviceVector;
+import thrust.ThrustTest.IntHostVector;
+import thrust.ThrustTest.IntPlus;
 
 import com.sun.media.imageioimpl.common.ImageUtil;
 import com.vividsolutions.jts.geom.Geometry;
@@ -102,7 +98,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
-            @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff) {
+            @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
+            @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) {
 
         // Check on the index 7
         boolean nullSubId = subId == null || subId.isEmpty();
@@ -241,9 +239,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
          * 		> isUrban = false/true			------------------------|
          * 		> RADIUS [meters] = scalar		---------------------------------|
          */
-        boolean isRural = false;// link to GUI
-        int RADIUS 		= 100;// [m] // link to GUI
-        Object output = calculateCUDAIndex(index, subId, areaPx, beans, isRural, RADIUS);
+        Object output = calculateCUDAIndex(index, subId, areaPx, beans, rural, radius);
 //		long estimatedTime = System.currentTimeMillis() - startTime;
 //		System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
 		Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
@@ -254,7 +250,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
         // For index 8 calculate the final Image
         else if (index == 8) {
-        	System.out.println("rural="+isRural + " -- radius="+RADIUS+" [m]");
+        	System.out.println("rural="+rural + " -- radius="+radius+" [m]");
             List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
             double[][][] images = (double[][][]) output;
@@ -293,14 +289,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             stats.setReferenceImage(finalRef);
             // Check if the same calculations must be done for the Current coverage
             if (nowCoverage != null) {
-                double[][] curData = images[1];
-                double[][] diffData = images[2];
                 RenderedImage[] currImgs = new RenderedImage[numGeo];
                 RenderedImage[] diffImgs = new RenderedImage[numGeo];
                 for (int i = 0; i < numGeo; i++) {
                     CUDABean bean = beans.get(i);
-                    double[] data = curData[i];
-                    double[] diff = diffData[i];
+                    double[] data = images[i][1];
+                    double[] diff = images[i][2];
                     Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
                             bean.getHeight());
                     currImgs[i] = createImage(rect, data);
@@ -413,6 +407,24 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         			return null;
         		case 6:  // edge density [perimeter]
         			//result[i] = CUDAClass.edge_density( beans, rural, areaPx, rayIndex );
+        			ThrustTest test = new ThrustTest();
+        			
+        			// generate 32M random numbers serially
+        	        IntHostVector h_vec = new IntHostVector(32 << 20);
+        	        test.generate(h_vec.begin(), h_vec.end(), test.rand());
+
+        	        // transfer data to the device
+        	        IntDeviceVector d_vec = new IntDeviceVector(h_vec);
+
+        	        // sort data on the device (846M keys per second on GeForce GTX 480)
+        	        test.sort(d_vec.begin(), d_vec.end());
+
+        	        // transfer data back to host
+        	        test.copy(d_vec.begin(), d_vec.end(), h_vec.begin());
+
+        	        // compute sum on device
+        	        int x = test.reduce(d_vec.begin(), d_vec.end(), 0, new IntPlus());
+        	        
         			return null;
         		case 7:  // urban diffusion
         			if(subId.equalsIgnoreCase("a")){ 		// urban_area [reduction]* --> a modification from original occurred!
@@ -435,7 +447,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     		result[j][i]  = CUDAClass.fragmentation( beans, rural, areaPx, ray_pixels, i, j );
                         }
                     	if (n_years>1){
-                    		result[j][2] = result[j][1];
+                    		result[j][n_years] = result[j][1];
         /*                	for(int ii=0;ii<beans.get(j).width*beans.get(j).height;ii++){
                         		result[j][n_years][ii] = result[j][1][ii]-result[j][0][ii];
                         	}*/
@@ -611,7 +623,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @author geosolutions
      * 
      */
-    static class CUDABean {
+	static class CUDABean {
         /** Reference Coverage data array */
         byte[] referenceImage;
 

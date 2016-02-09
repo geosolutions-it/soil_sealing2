@@ -47,7 +47,6 @@ import org.geotools.feature.simple.SimpleFeatureBuilder;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.geotools.filter.IsEqualsToImpl;
 import org.geotools.gce.imagemosaic.ImageMosaicFormat;
-import org.geotools.geometry.Envelope2D;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.geometry.jts.JTSFactoryFinder;
 import org.geotools.geometry.jts.ReferencedEnvelope;
@@ -55,10 +54,8 @@ import org.geotools.process.ProcessException;
 import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeProcess;
 import org.geotools.process.factory.DescribeResult;
-import org.geotools.referencing.CRS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.geotools.referencing.operation.transform.AffineTransform2D;
-import org.geotools.referencing.operation.transform.ProjectiveTransform;
 import org.geotools.resources.image.ImageUtilities;
 import org.geotools.util.NullProgressListener;
 import org.geotools.util.logging.Logging;
@@ -73,11 +70,10 @@ import org.opengis.parameter.ParameterValueGroup;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.NoSuchAuthorityCodeException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
-import org.opengis.referencing.datum.PixelInCell;
-import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 
 import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.MultiPolygon;
 import com.vividsolutions.jts.geom.Polygon;
@@ -132,8 +128,9 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             @DescribeParameter(name = "classes", collectionType = Integer.class, min = 0, description = "The domain of the classes used in input rasters") Set<Integer> classes,
             @DescribeParameter(name = "geocoderLayer", description = "Name of the geocoder layer, optionally fully qualified (workspace:name)") String geocoderLayer,
             @DescribeParameter(name = "geocoderPopulationLayer", description = "Name of the geocoder population layer, optionally fully qualified (workspace:name)") String geocoderPopulationLayer,
-            @DescribeParameter(name = "admUnits", min = 1, description = "Comma Separated list of Administrative Units") String admUnits,
-            @DescribeParameter(name = "admUnitSelectionType", min = 1, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
+            @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
+            @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
+            @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
             throws IOException {
 
@@ -153,9 +150,11 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                     + " / " + geocoderPopulationLayer + ")");
         }
 
+        /*
         if (admUnits == null || admUnits.isEmpty()) {
             throw new WPSException("No Administrative Unit has been specified.");
         }
+        */
         // ///////////////////////////////////////////////
         
         // ///////////////////////////////////////////////
@@ -181,7 +180,6 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
         // ///////////////////////////////////////////////
 
         try {
-
             final String referenceYear = ((IsEqualsToImpl) referenceFilter).getExpression2().toString().substring(0, 4);
             final String currentYear = (nowFilter == null ? null : ((IsEqualsToImpl) nowFilter).getExpression2().toString().substring(0, 4));
 
@@ -190,10 +188,49 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // the geometries and population values.
             // //////////////////////////////////////
             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
-            prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
-                    geoCodingReference, populationReference, municipalities, rois, populations,
-                    referenceYear, currentYear,
-                    referenceCrs, true);
+            if (admUnits != null && !admUnits.isEmpty()) {
+            	prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+                        geoCodingReference, populationReference, municipalities, rois, populations,
+                        referenceYear, currentYear,
+                        referenceCrs, true);
+            } else {
+            	populations = null;
+            	// handle Region Of Interest
+                if (roi != null) {
+                    if (roi instanceof GeometryCollection) {
+                        List<Polygon> geomPolys = new ArrayList<Polygon>();
+                        for (int g = 0; g < ((GeometryCollection) roi).getNumGeometries(); g++) {
+                            CoverageUtilities.extractPolygons(geomPolys,
+                                    ((GeometryCollection) roi).getGeometryN(g));
+                        }
+
+                        if (geomPolys.size() == 0) {
+                            roi = GEOMETRY_FACTORY.createPolygon(null, null);
+                        } else if (geomPolys.size() == 1) {
+                            roi = geomPolys.get(0);
+                        } else {
+                            roi = roi.getFactory().createMultiPolygon(
+                                    geomPolys.toArray(new Polygon[geomPolys.size()]));
+                        }
+                    }
+
+                    //
+                    // Make sure the provided roi intersects the layer BBOX in wgs84
+                    //
+                    final ReferencedEnvelope wgs84BBOX = ciReference.getLatLonBoundingBox();
+                    roi.setSRID(4326);
+                    roi = roi.intersection(JTS.toGeometry(wgs84BBOX));
+                    if (roi.isEmpty()) {
+                        throw new WPSException(
+                                "The provided ROI does not intersect the reference data BBOX: ",
+                                roi.toText());
+                    }
+                    final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference.getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                    roi.setSRID(4326);
+                    roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, true);
+                    rois.add(roi);
+                }
+            }
             
             // read reference coverage
             GridCoverageReader referenceReader = ciReference.getGridCoverageReader(null, null);
@@ -311,7 +348,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             attributes.add(new FeatureAttribute("index", getSealingIndex(index)));
             attributes.add(new FeatureAttribute("subindex", (subIndex != null ? getSealingSubIndex(subIndex) : "")));
             attributes.add(new FeatureAttribute("classes", (classes != null ? Arrays.toString(classes.toArray(new Integer[1])) : "")));
-            attributes.add(new FeatureAttribute("admUnits", admUnits));
+            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
             attributes.add(new FeatureAttribute("wsName", wsName));
             attributes.add(new FeatureAttribute("soilIndex", ""));

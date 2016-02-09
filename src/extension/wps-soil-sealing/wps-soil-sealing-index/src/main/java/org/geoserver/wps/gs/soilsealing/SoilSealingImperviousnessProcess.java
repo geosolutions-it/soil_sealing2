@@ -4,6 +4,7 @@
  */
 package org.geoserver.wps.gs.soilsealing;
 
+import java.awt.geom.AffineTransform;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import java.io.Serializable;
@@ -47,6 +48,7 @@ import org.geotools.feature.simple.SimpleFeatureBuilder;
 import org.geotools.filter.IsEqualsToImpl;
 import org.geotools.gce.imagemosaic.ImageMosaicFormat;
 import org.geotools.geometry.jts.JTS;
+import org.geotools.geometry.jts.ReferencedEnvelope;
 import org.geotools.process.ProcessException;
 import org.geotools.process.factory.DescribeParameter;
 import org.geotools.process.factory.DescribeProcess;
@@ -58,11 +60,14 @@ import org.opengis.coverage.grid.GridCoverageReader;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.filter.Filter;
 import org.opengis.geometry.Envelope;
+import org.opengis.metadata.spatial.PixelOrientation;
 import org.opengis.parameter.GeneralParameterValue;
 import org.opengis.parameter.ParameterValueGroup;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 
 import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.geom.GeometryCollection;
+import com.vividsolutions.jts.geom.Polygon;
 
 /**
  * Middleware process collecting the inputs for {@link UrbanGridProcess} indexes.
@@ -116,8 +121,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "geocoderLayer", min = 1, description = "Name of the geocoder layer, optionally fully qualified (workspace:name)") String geocoderLayer,
             @DescribeParameter(name = "geocoderPopulationLayer", min = 1, description = "Name of the geocoder population layer, optionally fully qualified (workspace:name)") String geocoderPopulationLayer,
             @DescribeParameter(name = "imperviousnessLayer", min = 1, description = "Name of the imperviousness layer, optionally fully qualified (workspace:name)") String imperviousnessLayer,
-            @DescribeParameter(name = "admUnits", min = 1, description = "Comma Separated list of Administrative Units") String admUnits,
-            @DescribeParameter(name = "admUnitSelectionType", min = 1, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
+            @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
+            @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
+            @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
             throws IOException {
     	
@@ -146,9 +153,11 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     + imperviousnessLayer + ")");
         }
 
+        /*
         if (admUnits == null || admUnits.isEmpty()) {
             throw new WPSException("No Administrative Unit has been specified.");
         }
+        */
         // ///////////////////////////////////////////////
         
         // ///////////////////////////////////////////////
@@ -184,6 +193,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             // Scan the geocoding layers and prepare
             // the geometries and population values.
             // //////////////////////////////////////
+            boolean rural = false;
             boolean toRasterSpace = false;
 
             switch (index) {
@@ -191,15 +201,59 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 if (!subIndex.equals("a"))
                     break;
             case 8:
+                if (subIndex != null && subIndex.equalsIgnoreCase("rural")) {
+                	rural = true;
+                } else if (subIndex != null && subIndex.equalsIgnoreCase("rural")) {
+                	rural = false;
+                }
             case 9:
             case 10:
                 toRasterSpace = true;
             }
             
             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
-            prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
-                    geoCodingReference, populationReference, municipalities, rois, populations,
-                    referenceYear, currentYear, referenceCrs, toRasterSpace);
+            if (admUnits != null && !admUnits.isEmpty()) {
+	            prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+	                    geoCodingReference, populationReference, municipalities, rois, populations,
+	                    referenceYear, currentYear, referenceCrs, toRasterSpace);
+            } else {
+            	populations = null;
+            	// handle Region Of Interest
+                if (roi != null) {
+                    if (roi instanceof GeometryCollection) {
+                        List<Polygon> geomPolys = new ArrayList<Polygon>();
+                        for (int g = 0; g < ((GeometryCollection) roi).getNumGeometries(); g++) {
+                            CoverageUtilities.extractPolygons(geomPolys,
+                                    ((GeometryCollection) roi).getGeometryN(g));
+                        }
+
+                        if (geomPolys.size() == 0) {
+                            roi = GEOMETRY_FACTORY.createPolygon(null, null);
+                        } else if (geomPolys.size() == 1) {
+                            roi = geomPolys.get(0);
+                        } else {
+                            roi = roi.getFactory().createMultiPolygon(
+                                    geomPolys.toArray(new Polygon[geomPolys.size()]));
+                        }
+                    }
+
+                    //
+                    // Make sure the provided roi intersects the layer BBOX in wgs84
+                    //
+                    final ReferencedEnvelope wgs84BBOX = ciReference.getLatLonBoundingBox();
+                    roi.setSRID(4326);
+                    roi = roi.intersection(JTS.toGeometry(wgs84BBOX));
+                    if (roi.isEmpty()) {
+                        throw new WPSException(
+                                "The provided ROI does not intersect the reference data BBOX: ",
+                                roi.toText());
+                    }
+                    final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference.getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                    roi.setSRID(4326);
+                    roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
+                    rois.add(roi);
+                }
+            }
 
             System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
             
@@ -283,7 +337,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("index", getSealingIndex(index)));
             attributes.add(new FeatureAttribute("subindex", (subIndex != null ? getSealingSubIndex(subIndex) : "")));
             attributes.add(new FeatureAttribute("classes", ""));
-            attributes.add(new FeatureAttribute("admUnits", admUnits));
+            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
             attributes.add(new FeatureAttribute("wsName", wsName));
             attributes.add(new FeatureAttribute("soilIndex", ""));
@@ -318,13 +372,13 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         imperviousnessReference, referenceYear, currentYear);
 
                 indexValue = urbanGridProcess.execute(referenceCoverage, nowCoverage, index,
-                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null));
+                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
             } else {
                 final UrbanGridProcess urbanGridProcess = new UrbanGridProcess(
                         imperviousnessReference, referenceYear, currentYear);
 
                 indexValue = urbanGridProcess.execute(referenceCoverage, nowCoverage, index,
-                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null));
+                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
             }
     		long estimatedTime = System.currentTimeMillis() - startTime;
 

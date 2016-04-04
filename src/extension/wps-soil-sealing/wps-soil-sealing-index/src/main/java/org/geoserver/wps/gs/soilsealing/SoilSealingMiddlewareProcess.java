@@ -363,7 +363,11 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             com.vividsolutions.jts.geom.Envelope envelope = union.getEnvelopeInternal();
             
             if (buffer != null && buffer > 0) {
-            	envelope.expandBy(buffer);
+            	if (!"EPSG:4326".equals(ciReference.getSRS())) {
+            		envelope.expandBy(buffer);
+            	} else {
+            		envelope.expandBy(buffer / 111.128);
+            	}
             }
             
             // create with supplied crs

@@ -275,8 +275,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     ImageMosaicFormat.USE_JAI_IMAGEREAD.getDefaultValue(),
                     ImageMosaicFormat.USE_JAI_IMAGEREAD);
             
-            // Creation of a GridGeometry object used for forcing the reader to read only the active zones
-            GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, null);
+			// Creation of a GridGeometry object used for forcing the reader to read only the active zones
+            final Double buffer = (index == 12 ? 100.0 : 0.0);
+            final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer);
 
             if (gridROI != null) {
                 params = CoverageUtilities.replaceParameter(params, gridROI,
@@ -555,6 +556,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             break;
         case 11:
             indexName = "Model of Urban Development";
+            break;
+        case 12:
+            indexName = "New Urbanization";
             break;
         }
         

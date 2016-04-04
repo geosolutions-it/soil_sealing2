@@ -160,7 +160,7 @@ public class CUDAClass {
 
 		// sort function: Java or Cuda?
 		int[] sortedArray = ((int[]) result.get("h_histogram")).clone();
-		int N_polygons = (int) result.get("Nbins_0") - 1;
+		int N_polygons = ((int) result.get("Nbins_0")) - 1;
 
 		Arrays.sort(sortedArray);// !!ASCENDING!!
 		for (int ii = 1; ii <= (int) (N_polygons * (Distribution / 100.0)); ii++) {

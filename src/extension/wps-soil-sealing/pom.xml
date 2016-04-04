@@ -24,7 +24,7 @@
     <!--     dependencies are ignored.                               -->
     <!-- =========================================================== -->
     <dependencyManagement>
-	  <dependencies>
+      <dependencies>
         <dependency>
            <groupId>org.geoserver</groupId>
            <artifactId>gs-main</artifactId>

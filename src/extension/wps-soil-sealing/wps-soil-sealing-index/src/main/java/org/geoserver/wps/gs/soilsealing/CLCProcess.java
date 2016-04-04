@@ -177,9 +177,14 @@ public class CLCProcess implements GSProcess {
         if (refExists) {
             if (nowExists) {
                 double destinationNoData = 0d;
-                inputImage = BandMergeDescriptor.create(null, destinationNoData,
-                        GeoTools.getDefaultHints(), referenceCoverage.getRenderedImage(),
-                        nowCoverage.getRenderedImage());
+                inputImage = BandMergeDescriptor.create(
+                		null, 
+                		destinationNoData,
+                		true,
+                        GeoTools.getDefaultHints(), 
+                        referenceCoverage.getRenderedImage(),
+                        nowCoverage.getRenderedImage()
+                 );
             } else {
                 inputImage = referenceCoverage.getRenderedImage();
             }

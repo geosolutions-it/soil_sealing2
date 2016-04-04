@@ -152,6 +152,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case SIXTH_INDEX:
         case SEVENTH_INDEX:
         case ELEVENTH_INDEX:
+        case TWELVE_INDEX:
             if (!subIndexA) {
                 inRasterSpace = false;
             }

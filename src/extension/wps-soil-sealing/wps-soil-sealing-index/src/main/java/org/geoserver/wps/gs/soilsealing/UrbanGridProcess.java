@@ -113,6 +113,9 @@ public class UrbanGridProcess implements GSProcess {
     /** Constant associated to the 11th idx */
     public static final int ELEVENTH_INDEX = 11;
 
+    /** Constant associated to the 12th idx */
+    public static final int TWELVE_INDEX = 12;
+
     /** Header of the local Lambert-Equal Area projection */
     public static final String PROJ_HEADER = "PROJCS[\"Local area projection/ LOCAL_AREA_PROJECTION\",";
 
@@ -278,6 +281,7 @@ public class UrbanGridProcess implements GSProcess {
                 throw new IllegalArgumentException("No coefficient provided for the selected index");
             }
         case ELEVENTH_INDEX:
+        case TWELVE_INDEX:
             area = true;
             break;        	
         default:
@@ -610,8 +614,14 @@ public class UrbanGridProcess implements GSProcess {
         if (refExists) {
             if (nowExists) {
                 double destinationNoData = 0d;
-                inputImage = BandMergeDescriptor.create(null, destinationNoData, hints,
-                        referenceCoverage.getRenderedImage(), nowCoverage.getRenderedImage());
+                inputImage = BandMergeDescriptor.create(
+                		null, 
+                		destinationNoData, 
+                		true,
+                		hints,
+                        referenceCoverage.getRenderedImage(), 
+                        nowCoverage.getRenderedImage()
+                );
             } else {
                 inputImage = referenceCoverage.getRenderedImage();
             }

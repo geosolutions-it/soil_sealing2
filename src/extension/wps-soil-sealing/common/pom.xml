@@ -16,6 +16,42 @@
 	<name>Web Processing Service Soil Sealing Common WPS extension</name>
 
 	<dependencies>
+    	   	<dependency>
+        		<groupId>jcuda</groupId>
+        		<artifactId>jcuda</artifactId>
+	        	<version>0.5.5</version>
+        		<scope>system</scope>
+        		<systemPath>/usr/local/jcuda/jcuda-0.5.5.jar</systemPath>
+    	  	</dependency>
+                <dependency>
+                        <groupId>jcuda</groupId>
+                        <artifactId>jcublas</artifactId>
+                        <version>0.5.5</version>
+                        <scope>system</scope>
+                        <systemPath>/usr/local/jcuda/jcublas-0.5.5.jar</systemPath>
+                </dependency>
+                <dependency>
+                        <groupId>jcuda</groupId>
+                        <artifactId>jcufft</artifactId>
+                        <version>0.5.5</version>
+                        <scope>system</scope>
+                        <systemPath>/usr/local/jcuda/jcufft-0.5.5.jar</systemPath>
+                </dependency>
+                <dependency>
+                        <groupId>jcuda</groupId>
+                        <artifactId>jcurand</artifactId>
+                        <version>0.5.5</version>
+                        <scope>system</scope>
+                        <systemPath>/usr/local/jcuda/jcurand-0.5.5.jar</systemPath>
+                </dependency>
+                <dependency>
+                        <groupId>jcuda</groupId>
+                        <artifactId>jcusparse</artifactId>
+                        <version>0.5.5</version>
+                        <scope>system</scope>
+                        <systemPath>/usr/local/jcuda/jcusparse-0.5.5.jar</systemPath>
+                </dependency>
+
 		<dependency>
 			<groupId>org.geotools</groupId>
 			<artifactId>gt-process</artifactId>

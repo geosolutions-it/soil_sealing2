@@ -125,6 +125,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
             @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
+            @DescribeParameter(name = "pixelSize", min = 0, description = "Pixel Size") double pixelSize,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
             throws IOException {
     	
@@ -275,7 +276,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     ImageMosaicFormat.USE_JAI_IMAGEREAD);
             
             // Creation of a GridGeometry object used for forcing the reader to read only the active zones
-            GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs);
+            GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, null);
 
             if (gridROI != null) {
                 params = CoverageUtilities.replaceParameter(params, gridROI,
@@ -372,13 +373,13 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         imperviousnessReference, referenceYear, currentYear);
 
                 indexValue = urbanGridProcess.execute(referenceCoverage, nowCoverage, index,
-                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
+                        subIndex, pixelSize, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
             } else {
                 final UrbanGridProcess urbanGridProcess = new UrbanGridProcess(
                         imperviousnessReference, referenceYear, currentYear);
 
                 indexValue = urbanGridProcess.execute(referenceCoverage, nowCoverage, index,
-                        subIndex, null, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
+                        subIndex, pixelSize, rois, populations, (index == 10 ? INDEX_10_VALUE : null), rural, radius);
             }
     		long estimatedTime = System.currentTimeMillis() - startTime;
 
@@ -392,18 +393,24 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             SoilSealingIndex soilSealingIndex = new SoilSealingIndex(index, subIndex);
             soilSealingIndexResult.setIndex(soilSealingIndex);
 
-            double[][] refValues = new double[indexValue.size()][];
-            double[][] curValues = (nowFilter == null ? null : new double[indexValue.size()][]);
+            double[][]   refValues     = new double[indexValue.size()][];
+            double[][]   curValues     = (nowFilter == null ? null : new double[indexValue.size()][]);
+            double[][][] complexValues = new double[indexValue.size()][][];
 
             System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
             
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
-                refValues[i] = (statContainer.getResultsRef() != null ? statContainer
-                        .getResultsRef() : new double[1]);
+                
+            	refValues[i] = (statContainer.getResultsRef() != null ? statContainer.getResultsRef() : new double[1]);
+                
                 if (nowFilter != null)
-                    curValues[i] = (statContainer.getResultsNow() != null ? statContainer
-                            .getResultsNow() : new double[1]);
+                {
+                    curValues[i] = (statContainer.getResultsNow() != null ? statContainer.getResultsNow() : new double[1]);
+                }
+                
+                complexValues[i] = (statContainer.getResultsComplex() != null ? statContainer.getResultsComplex() : new double[1][1]);
+                
                 i++;
             }
 
@@ -414,7 +421,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             
             String[] clcLevels = null;
             SoilSealingOutput soilSealingRefTimeOutput = new SoilSealingOutput(referenceName,
-                    (String[]) municipalities.toArray(new String[1]), clcLevels, refValues);
+                    (String[]) municipalities.toArray(new String[1]), clcLevels, refValues, complexValues);
             SoilSealingTime soilSealingRefTime = new SoilSealingTime(
                     ((IsEqualsToImpl) referenceFilter).getExpression2().toString(),
                     soilSealingRefTimeOutput);
@@ -424,7 +431,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             
             if (nowFilter != null) {
                 SoilSealingOutput soilSealingCurTimeOutput = new SoilSealingOutput(referenceName,
-                        (String[]) municipalities.toArray(new String[1]), clcLevels, curValues);
+                        (String[]) municipalities.toArray(new String[1]), clcLevels, curValues, complexValues);
                 SoilSealingTime soilSealingCurTime = new SoilSealingTime(
                         ((IsEqualsToImpl) nowFilter).getExpression2().toString(),
                         soilSealingCurTimeOutput);
@@ -433,7 +440,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
             // Giuliano :: The following "if" is a slow piece of code, in particular for JAVA-mode calculation of indices.
-            if (index == 8) {
+            if (index == 8 || index == 9) {
                 buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName,
                         defaultStyle);
             }
@@ -545,6 +552,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             break;
         case 10:
             indexName = "Potential Loss of Food Supply";
+            break;
+        case 11:
+            indexName = "Model of Urban Development";
             break;
         }
         

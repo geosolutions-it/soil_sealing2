@@ -300,7 +300,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @throws Exception
      */
     protected GridGeometry2D createGridROI(CoverageInfo ciReference, List<Geometry> rois,
-            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs) 
+            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs, final Double buffer) 
                     throws TransformException, FactoryException, Exception {
         // Creation of a Geometry union for cropping the input coverages
         Geometry union = null;
@@ -361,6 +361,11 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             }
             
             com.vividsolutions.jts.geom.Envelope envelope = union.getEnvelopeInternal();
+            
+            if (buffer != null && buffer > 0) {
+            	envelope.expandBy(buffer);
+            }
+            
             // create with supplied crs
             Envelope2D bounds = JTS.getEnvelope2D(envelope, covCRS);
 
@@ -368,6 +373,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             gridROI = new GridGeometry2D(PixelInCell.CELL_CORNER,
                     (MathTransform) gridToWorldCorner, bounds, null);
         }
+        
         return gridROI;
     }
 }

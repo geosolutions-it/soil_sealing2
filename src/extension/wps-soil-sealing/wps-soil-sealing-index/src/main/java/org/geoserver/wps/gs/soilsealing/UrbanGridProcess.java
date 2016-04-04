@@ -109,6 +109,9 @@ public class UrbanGridProcess implements GSProcess {
 
     /** Constant associated to the 10th idx */
     public static final int TENTH_INDEX = 10;
+    
+    /** Constant associated to the 11th idx */
+    public static final int ELEVENTH_INDEX = 11;
 
     /** Header of the local Lambert-Equal Area projection */
     public static final String PROJ_HEADER = "PROJCS[\"Local area projection/ LOCAL_AREA_PROJECTION\",";
@@ -193,7 +196,7 @@ public class UrbanGridProcess implements GSProcess {
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
-            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) {
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) throws IOException {
 
         // Check on the index 7
         boolean nullSubId = subId == null || subId.isEmpty();
@@ -274,6 +277,9 @@ public class UrbanGridProcess implements GSProcess {
             } else {
                 throw new IllegalArgumentException("No coefficient provided for the selected index");
             }
+        case ELEVENTH_INDEX:
+            area = true;
+            break;        	
         default:
             throw new IllegalArgumentException("Wrong index declared");
         }
@@ -281,8 +287,10 @@ public class UrbanGridProcess implements GSProcess {
         // If index is not 7a-8-9-10 then the input Urban Grids must be loaded
         // from the shp file.
 
-        double[] statsRef = null;
-        double[] statsNow = null;
+        double[] statsRef         = null;
+        double[] statsNow         = null;
+        double[][][] statsComplex = null;
+        
         try {
             // For each coverage are calculated the results
             if (referenceCoverage != null && referenceYear != null && imperviousnessReference != null) {
@@ -297,7 +305,7 @@ public class UrbanGridProcess implements GSProcess {
             throw new ProcessException(e);
         }
         // Result accumulation
-        List<StatisticContainer> results = accumulateResults(rois, statsRef, statsNow);
+        List<StatisticContainer> results = accumulateResults(rois, statsRef, statsNow, statsComplex);
 
         return results;
 
@@ -322,17 +330,20 @@ public class UrbanGridProcess implements GSProcess {
      * @param rois input geometries used for calculations
      * @param reference reference coverage results array
      * @param now current coverage results array
+	 * @param statsComplex 
      * @return
      */
     protected List<StatisticContainer> accumulateResults(List<Geometry> rois, double[] reference,
-            double[] now) {
+            double[] now, double[][][] statsComplex) {
         // Geometries number
         int numGeo = rois.size();
         // Final list initialization
         List<StatisticContainer> results = new ArrayList<StatisticContainer>(numGeo);
         // Check on the input coverages
-        if (reference == null && now == null) {
-            throw new ProcessException("No result has been calculated");
+        if (reference == null && now == null && statsComplex == null) {
+        
+        	throw new ProcessException("No result has been calculated");
+
         } else if (reference != null && now == null) {
             // check on the dimensions
             if (numGeo != reference.length) {
@@ -343,8 +354,11 @@ public class UrbanGridProcess implements GSProcess {
             for (int i = 0; i < numGeo; i++) {
                 Geometry geo = rois.get(i);
 
-                StatisticContainer container = new StatisticContainer(geo,
-                        new double[] { reference[i] }, null);
+                StatisticContainer container = new StatisticContainer(
+                		geo,
+                        new double[] { reference[i] }, 
+                        null,
+                        null);
                 results.add(container);
             }
         } else if (reference == null && now != null) {
@@ -357,10 +371,31 @@ public class UrbanGridProcess implements GSProcess {
             for (int i = 0; i < numGeo; i++) {
                 Geometry geo = rois.get(i);
 
-                StatisticContainer container = new StatisticContainer(geo, new double[] { now[i] },
+                StatisticContainer container = new StatisticContainer(
+                		geo, 
+                		new double[] { now[i] },
+                        null,
                         null);
                 results.add(container);
             }
+        } else if(reference == null && now == null && statsComplex != null) {
+            // check on the dimensions
+            if (numGeo != statsComplex.length) {
+                throw new ProcessException(
+                        "Geometries and their results don't have the same dimensions");
+            }
+            // For each Geometry a container is created
+            for (int i = 0; i < numGeo; i++) {
+                Geometry geo = rois.get(i);
+
+                StatisticContainer container = new StatisticContainer(
+                		geo,
+                        null,
+                        null,
+                        statsComplex[i]);
+                results.add(container);
+            }
+        	
         } else {
             // check on the dimensions
             if (numGeo != now.length || numGeo != reference.length) {
@@ -381,10 +416,11 @@ public class UrbanGridProcess implements GSProcess {
                 container.setResultsRef(new double[] { refIdx });
                 container.setResultsNow(new double[] { nowIdx });
                 container.setResultsDiff(new double[] { percentual });
-
+                
                 results.add(container);
             }
         }
+        
         return results;
     }
 

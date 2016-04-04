@@ -210,7 +210,7 @@ public class UrbanGridProcessTest {
 	}
 
 	// @Test
-	public void testIndex5() {
+	public void testIndex5() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, null, 5, null, null, geomListUtm32N, null,
 				null, false, 100);
@@ -226,7 +226,7 @@ public class UrbanGridProcessTest {
 	}
 
 	// @Test
-	public void testIndex5img2() {
+	public void testIndex5img2() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, nowCoverage, 5, null, null, geomListUtm32N,
 				null, null, false, 100);
@@ -288,7 +288,7 @@ public class UrbanGridProcessTest {
 	}
 
 	// @Test
-	public void testIndex7() {
+	public void testIndex7() throws IOException {
 		// Index 7a
 		List<StatisticContainer> resultsA = urbanProcess.execute(
 				referenceCoverage, null, 7, "a", 1d, geomListRaster, null,
@@ -328,7 +328,7 @@ public class UrbanGridProcessTest {
 	}
 
 	// @Test
-	public void testIndex7img2() {
+	public void testIndex7img2() throws IOException {
 		// Index 7a
 		List<StatisticContainer> resultsA = urbanProcess.execute(
 				referenceCoverage, nowCoverage, 7, "a", 1d, geomListRaster,
@@ -395,7 +395,7 @@ public class UrbanGridProcessTest {
 	}
 
 	@Test
-	public void testIndex8() {
+	public void testIndex8() throws IOException {
 		// Selections of the Hints to use
 		RenderingHints hints = GeoTools.getDefaultHints().clone();
 		int padding = 10;
@@ -441,7 +441,7 @@ public class UrbanGridProcessTest {
 	}
 
 	@Test
-	public void testIndex8img2() {
+	public void testIndex8img2() throws IOException {
 		// Selections of the Hints to use
 		RenderingHints hints = GeoTools.getDefaultHints().clone();
 		int padding = 10;
@@ -518,7 +518,7 @@ public class UrbanGridProcessTest {
 	}
 
 	@Test
-	public void testIndex9() {
+	public void testIndex9() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, nowCoverage, 9, null, 1d, geomListRaster,
 				populations, null, false, 100);
@@ -534,7 +534,7 @@ public class UrbanGridProcessTest {
 	}
 
 	@Test
-	public void testIndex10() {
+	public void testIndex10() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, nowCoverage, 10, null, 1d, geomListRaster,
 				populations, multiplier, false, 100);
@@ -551,27 +551,27 @@ public class UrbanGridProcessTest {
 
 	// EXCEPTION TESTS
 	@Test(expected = IllegalArgumentException.class)
-	public void testNoCoverages() {
+	public void testNoCoverages() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(null, null, 10,
 				null, 1d, geomListRaster, populations, multiplier, false, 100);
 	}
 
 	@Test(expected = IllegalArgumentException.class)
-	public void testWrongSubId() {
+	public void testWrongSubId() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, null, 7, "d", 1d, geomListRaster,
 				populations, multiplier, false, 100);
 	}
 
 	@Test(expected = IllegalArgumentException.class)
-	public void testWrongIndex() {
+	public void testWrongIndex() throws IOException {
 		List<StatisticContainer> results = urbanProcess.execute(
 				referenceCoverage, null, 11, "d", 1d, geomListRaster,
 				populations, multiplier, false, 100);
 	}
 
 	@Test(expected = ProcessException.class)
-	public void testNoDatastore() {
+	public void testNoDatastore() throws IOException {
 		List<StatisticContainer> results = new UrbanGridProcess(refShp, curShp)
 				.execute(referenceCoverage, null, 5, null, 1d, geomListUtm32N,
 						null, null, false, 100);

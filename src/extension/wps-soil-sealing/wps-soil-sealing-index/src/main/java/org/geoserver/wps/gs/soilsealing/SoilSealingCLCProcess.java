@@ -244,7 +244,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // merge USE_JAI_IMAGEREAD to false if needed
             params = CoverageUtilities.replaceParameter(params, ImageMosaicFormat.USE_JAI_IMAGEREAD.getDefaultValue(), ImageMosaicFormat.USE_JAI_IMAGEREAD);
             
-            GridGeometry2D gridROI = createGridROI(ciReference, rois, true, referenceCrs);
+            GridGeometry2D gridROI = createGridROI(ciReference, rois, true, referenceCrs, null);
 
             if (gridROI != null) {
                 params = CoverageUtilities.replaceParameter(params, gridROI,
@@ -393,8 +393,9 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             SoilSealingIndex soilSealingIndex = new SoilSealingIndex(index, subIndex);
             soilSealingIndexResult.setIndex(soilSealingIndex);
             
-            double[][] refValues = new double[indexValue.size()][];
-            double[][] curValues = (nowFilter == null ? null : new double[indexValue.size()][]);
+            double[][]   refValues    = new double[indexValue.size()][];
+            double[][]   curValues    = (nowFilter == null ? null : new double[indexValue.size()][]);
+            double[][][] statsComplex = null;
 
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
@@ -412,12 +413,26 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                 clcLevels[i++] = String.valueOf(clcLevel);
             }
             
-            SoilSealingOutput soilSealingRefTimeOutput = new SoilSealingOutput(referenceName, (String[]) municipalities.toArray(new String[1]), clcLevels, refValues);
+            SoilSealingOutput soilSealingRefTimeOutput = 
+            		new SoilSealingOutput(
+            				referenceName, 
+            				(String[]) municipalities.toArray(new String[1]), 
+            				clcLevels, 
+            				refValues,
+            				statsComplex);
+            
             SoilSealingTime soilSealingRefTime = new SoilSealingTime(((IsEqualsToImpl) referenceFilter).getExpression2().toString(), soilSealingRefTimeOutput);
             soilSealingIndexResult.setRefTime(soilSealingRefTime);
 
             if (nowFilter != null) {
-                SoilSealingOutput soilSealingCurTimeOutput = new SoilSealingOutput(referenceName, (String[]) municipalities.toArray(new String[1]), clcLevels, curValues);
+                SoilSealingOutput soilSealingCurTimeOutput = 
+                		new SoilSealingOutput(
+                				referenceName, 
+                				(String[]) municipalities.toArray(new String[1]), 
+                				clcLevels, 
+                				curValues,
+                				statsComplex);
+                
                 SoilSealingTime soilSealingCurTime = new SoilSealingTime(((IsEqualsToImpl) nowFilter).getExpression2().toString(), soilSealingCurTimeOutput);
                 soilSealingIndexResult.setCurTime(soilSealingCurTime);
             }

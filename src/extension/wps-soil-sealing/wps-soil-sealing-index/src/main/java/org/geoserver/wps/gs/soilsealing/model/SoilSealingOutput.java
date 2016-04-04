@@ -15,18 +15,21 @@ public class SoilSealingOutput {
 
     private double[][] values;
 
+	private double[][][] complexValues;
+
     /**
      * @param referenceName
      * @param admUnits
      * @param clcLevels
      * @param values
      */
-    public SoilSealingOutput(String referenceName, String[] admUnits, String[] clcLevels, double[][] values) {
+    public SoilSealingOutput(String referenceName, String[] admUnits, String[] clcLevels, double[][] values, double[][][] complexValues) {
         super();
         this.referenceName = referenceName;
         this.admUnits = admUnits;
         this.clcLevels = clcLevels;
         this.values = values;
+        this.complexValues = complexValues;
     }
 
     /**
@@ -98,5 +101,19 @@ public class SoilSealingOutput {
     public void setValues(double[][] values) {
         this.values = values;
     }
+
+	/**
+	 * @return the complexValues
+	 */
+	public double[][][] getComplexValues() {
+		return complexValues;
+	}
+
+	/**
+	 * @param complexValues the complexValues to set
+	 */
+	public void setComplexValues(double[][][] complexValues) {
+		this.complexValues = complexValues;
+	}
 
 }

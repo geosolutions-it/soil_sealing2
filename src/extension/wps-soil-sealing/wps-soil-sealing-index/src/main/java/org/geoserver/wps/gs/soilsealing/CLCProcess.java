@@ -253,8 +253,12 @@ public class CLCProcess implements GSProcess {
                     // Variation array
                     double[] coeffVariation = calculateVariation(numClass, coeffCop, percentual);
                     // Object used for storing the index results
-                    StatisticContainer statisticContainer = new StatisticContainer(geo,
-                            coeffCop[ZERO_IDX], coeffCop[1]);
+                    StatisticContainer statisticContainer = 
+                    		new StatisticContainer(
+                    				geo,
+                    				coeffCop[ZERO_IDX], 
+                    				coeffCop[1],
+                    				null);
                     statisticContainer.setResultsDiff(coeffVariation);
                     // Addition of the Statistics to a List
                     container.add(statisticContainer);
@@ -267,7 +271,7 @@ public class CLCProcess implements GSProcess {
                     // Geometry associated
                     Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
                     // Addition of the Statistics to a List
-                    container.add(new StatisticContainer(geo, coeffCop, null));
+                    container.add(new StatisticContainer(geo, coeffCop, null, null));
                 }
             }
             break;
@@ -293,7 +297,7 @@ public class CLCProcess implements GSProcess {
                 // Geometry associated
                 Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
                 // Addition of the Statistics to a List
-                container.add(new StatisticContainer(geo, coeffVariation, null));
+                container.add(new StatisticContainer(geo, coeffVariation, null, null));
             }
             break;
         case THIRD_INDEX:
@@ -338,7 +342,13 @@ public class CLCProcess implements GSProcess {
                 }
                 
                 // Addition of the Statistics to a List
-                StatisticContainer statisticContainer = new StatisticContainer(geo, new double[] { result }, null);
+                StatisticContainer statisticContainer = 
+                		new StatisticContainer(
+                				geo, 
+                				new double[] { result }, 
+                				null, 
+                				null);
+                
                 // Setting of the color to use
                 if(color!=null){
                     statisticContainer.setColor(color);
@@ -376,8 +386,14 @@ public class CLCProcess implements GSProcess {
                 }
                 
                 // Addition of the Statistics to a List
-                StatisticContainer statisticContainer = new StatisticContainer(geo, new double[] { sprawl }, null);
-             // Setting of the color to use
+                StatisticContainer statisticContainer = 
+                		new StatisticContainer(
+                				geo, 
+                				new double[] { sprawl }, 
+                				null,
+                				null);
+                
+                // Setting of the color to use
                 if(color!=null){
                     statisticContainer.setColor(color);
                 }
@@ -499,7 +515,9 @@ public class CLCProcess implements GSProcess {
 
         private double[] resultsDiff;
 
-        private RenderedImage referenceImage;
+		private double[][] resultsComplex;
+
+		private RenderedImage referenceImage;
 
         private RenderedImage nowImage;
 
@@ -510,10 +528,11 @@ public class CLCProcess implements GSProcess {
         public StatisticContainer() {
         }
 
-        public StatisticContainer(Geometry geom, double[] resultsRef, double[] resultsNow) {
+        public StatisticContainer(Geometry geom, double[] resultsRef, double[] resultsNow, double[][] resultsComplex) {
             this.geom = geom;
             this.resultsRef = resultsRef;
             this.resultsNow = resultsNow;
+            this.resultsComplex = resultsComplex;
         }
 
         public Geometry getGeom() {
@@ -534,6 +553,14 @@ public class CLCProcess implements GSProcess {
 
         public void setResultsRef(double[] resultsRef) {
             this.resultsRef = resultsRef;
+        }
+
+		public double[][] getResultsComplex() {
+			return this.resultsComplex;
+		}
+
+        public void setResultsComplex(double[][] resultsComplex) {
+        	this.resultsComplex = resultsComplex;
         }
 
         public double[] getResultsNow() {

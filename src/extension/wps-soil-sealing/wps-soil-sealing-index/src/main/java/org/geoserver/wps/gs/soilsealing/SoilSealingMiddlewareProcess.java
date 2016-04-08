@@ -32,6 +32,7 @@ import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 
+import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.PrecisionModel;
@@ -304,6 +305,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     throws TransformException, FactoryException, Exception {
         // Creation of a Geometry union for cropping the input coverages
         Geometry union = null;
+        Geometry roiUnion = null;
+        Geometry roiBuffer = null;
 
         CoordinateReferenceSystem covCRS = referenceCrs;
 
@@ -327,7 +330,55 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     union = union.union(geo);
                 }
             }
+            
+            if (buffer != null && buffer > 0) {
+            	if (roiUnion == null) {
+            		roiUnion = geo;
+            	} else {
+            		roiUnion = roiUnion.union(geo);
+            	}
+            }
         }
+
+        if (buffer != null && buffer > 0 && !roiUnion.isEmpty()) {
+            com.vividsolutions.jts.geom.Envelope envelope = roiUnion.getEnvelopeInternal();
+            
+        	if (!"EPSG:4326".equals(ciReference.getSRS())) {
+        		envelope.expandBy(buffer);
+            	roiBuffer = roiUnion.buffer(buffer);
+        	} else {
+        		envelope.expandBy(buffer / 111.128);
+        		roiBuffer = roiUnion.buffer(buffer / 111.128);
+        	}
+        	        	
+        	if (toRasterSpace) {
+        		Geometry projected = JTS.transform(roiBuffer,
+        				ProjectiveTransform.create(gridToWorldCorner));
+        		union = union.union(projected);
+        	} else {
+        		union = union.union(roiBuffer);
+        	}
+
+        	rois.clear();
+        	rois.add(roiUnion);
+        	
+        	if (union == null) {
+                if (toRasterSpace) {
+                    union = JTS.transform(roiBuffer, ProjectiveTransform.create(gridToWorldCorner));
+                } else {
+                    union = roiBuffer;
+                }
+            } else {
+                if (toRasterSpace) {
+                    Geometry projected = JTS.transform(roiBuffer,
+                            ProjectiveTransform.create(gridToWorldCorner));
+                    union = union.union(projected);
+                } else {
+                    union = union.union(roiBuffer);
+                }
+            }
+        }        
+
         // Setting of the final srID and reproject to the final CRS
         CoordinateReferenceSystem crs = (CoordinateReferenceSystem) union.getUserData();
         if (crs != null) {
@@ -361,15 +412,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             }
             
             com.vividsolutions.jts.geom.Envelope envelope = union.getEnvelopeInternal();
-            
-            if (buffer != null && buffer > 0) {
-            	if (!"EPSG:4326".equals(ciReference.getSRS())) {
-            		envelope.expandBy(buffer);
-            	} else {
-            		envelope.expandBy(buffer / 111.128);
-            	}
-            }
-            
+                        
             // create with supplied crs
             Envelope2D bounds = JTS.getEnvelope2D(envelope, covCRS);
 

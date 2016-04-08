@@ -617,7 +617,6 @@ public class UrbanGridProcess implements GSProcess {
                 inputImage = BandMergeDescriptor.create(
                 		null, 
                 		destinationNoData, 
-                		true,
                 		hints,
                         referenceCoverage.getRenderedImage(), 
                         nowCoverage.getRenderedImage()

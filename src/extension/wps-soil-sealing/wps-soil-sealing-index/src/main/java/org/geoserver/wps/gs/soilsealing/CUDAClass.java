@@ -76,8 +76,7 @@ import com.sun.media.imageioimpl.common.ImageUtil;
 public class CUDAClass {
 
 	/** Logger used for logging exceptions */
-	public static final Logger LOGGER = Logger.getLogger(CUDAClass.class
-			.toString());
+	public static final Logger LOGGER = Logger.getLogger(CUDAClass.class.toString());
 
 	private final static String PTXFILE_fragmentation = "/opt/soil_sealing/cudacodes/fragmentation.ptx";
 	private final static String PTXFILE_land_take = "/opt/soil_sealing/cudacodes/land_take.ptx";
@@ -86,32 +85,22 @@ public class CUDAClass {
 
 	// private Clock start_t,end_t;
 
-	/*
-	 * SIZE of BLOCK to set dynamic use instead: floor( sqrt( maxThreadsPerBlock
-	 * )) ATTENTION: this value and the one set in .cu file used to compile .ptx
-	 * must be the same !!!!!
-	 */
-	private final static double m2_to_ha = 1D / 10000D;// 1 squared meter is
-														// m2_to_ha hectares
-	// 6 persons per year are fed by 1 hectare of harvested land cultivated with
-	// wheat
+	// 1 squared meter is m2_to_ha hectares
+	private final static double m2_to_ha = 1D / 10000D;
+	// 6 persons/year are fed by 1 hectare of harvested land cultivated with wheat
 	private final static double fedPersons = 6.0;// [persons * year-1 * ha-1]
-
 	private final static int numberOfBins = 4;
 	private final static int BLOCKDIM_X = 32;
 	private final static int BLOCKDIM = 256;
 	// ***perimeter :: _pi***
-	private final static int threads_pi = 512;// [reduce6] No of threads working
-												// in single block
-	private final static int blocks_pi = 64; // [reduce6] No of blocks working
-												// in
-												// grid (this gives also the
-												// size of
-												// output Perimeter, to be
-												// summed outside CUDA)
-	private final static int mask_len_pi = 40; // [tidx2_ns] No of pixels
-												// processed by single thread
-	private final static int BLOCKDIM_X_ccl = 32; //
+	// [reduce6] No of threads working in single block
+	private final static int threads_pi = 512;
+	// [reduce6] No of blocks working in grid (this gives also the size of
+	// output Perimeter, to be summed outside CUDA)
+	private final static int blocks_pi = 64;
+	// [tidx2_ns] No of pixels processed by single thread
+	private final static int mask_len_pi = 40; 
+	private final static int BLOCKDIM_X_ccl = 32;
 	private final static int threads_ccl = 512;
 	// *** land take***
 	private final static int threads_lt = 512;
@@ -2943,8 +2932,9 @@ public class CUDAClass {
 		{
 			int cSum = fictitious_refImage[ii] + ROI[ii];
 			fictitious_curImage[ii] = (byte) (cSum>0? 1:0);
-    	}		
-		beans.get(j).setReferenceImage(fictitious_refImage);
+			//fictitious_curImage[ii] = (ROI[ii] > 0 ? 1 : fictitious_refImage[ii]);
+    	}
+		beans.get(j).setCurrentImage(fictitious_curImage);
 		
 		// –Land Take–
         //final List<double[]> resultCuda = CUDAClass.land_take( beans, j );

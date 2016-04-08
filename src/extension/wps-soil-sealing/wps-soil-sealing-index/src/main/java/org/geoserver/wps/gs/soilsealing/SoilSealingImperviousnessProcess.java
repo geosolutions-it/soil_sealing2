@@ -276,7 +276,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     ImageMosaicFormat.USE_JAI_IMAGEREAD);
             
 			// Creation of a GridGeometry object used for forcing the reader to read only the active zones
-            final Double buffer = (index == 12 ? 100.0 : 0.0);
+            final Double buffer = (index == 12 ? radius : 0.0);
             final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer);
 
             if (gridROI != null) {
@@ -441,7 +441,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             System.out.println( ++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
             // Giuliano :: The following "if" is a slow piece of code, in particular for JAVA-mode calculation of indices.
-            if (index == 8 || index == 9) {
+            if (index == 8 || index == 9 || index == 12) {
                 buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName,
                         defaultStyle);
             }

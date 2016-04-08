@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -234,13 +233,14 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             //MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
+            int buffer = (index == 12 ? radius : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
                 bean.setAreaPix(areaPx);
 
                 // Populate it with Reference coverage parameters
-                populateBean(bean, true, referenceCoverage, geo, null);
+                populateBean(bean, true, referenceCoverage, geo, null, buffer);
 
                 // Set the population values if needed
                 if (populations != null) {
@@ -250,7 +250,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
                 // Do the same for the Current Coverage if present
                 if (nowCoverage != null) {
-                    populateBean(bean, false, nowCoverage, geo, null);
+                    populateBean(bean, false, nowCoverage, geo, null, buffer);
                     // Set the population values if needed
                     if (populations != null) {
                         Integer popCur = populations.get(1).get(counter);
@@ -293,9 +293,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             statsNow = values[0].length > 1 ? values[0][1] : null;
         }
         // For index 8 calculate the final Image
-        else if (index == 8 || index == 9) {
+        else if (index == 8 || index == 9 || index == 12) {
         	
-        	System.out.println("rural="+rural + " -- radius="+radius+" [m]");
+        	System.out.println("rural="+rural + " -- radius/buffer="+radius+" [m]");
         	
             List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
@@ -310,10 +310,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             for (int i = 0; i < numGeo; i++) {
                 CUDABean bean = beans.get(i);
                 double[] data = refData[i];
-                Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
-                        bean.getHeight());
-                refImgs[i] = createImage(rect, data);
-                roiObjs[i] = bean.getRoiObj();
+                if (data != null) {
+                    Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
+                            bean.getHeight());
+                    refImgs[i] = createImage(rect, data);
+                    roiObjs[i] = bean.getRoiObj();
+                }
             }
             ImageLayout layout = new ImageLayout2();
             layout.setMinX(refRect.x);
@@ -324,7 +326,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
             
             // Mosaic of the images
-            double[] background = (index==8?new double[]{-1.0}:new double[]{0.0});
+            double[] background = (index==8||index==12?new double[]{-1.0}:new double[]{0.0});
 			RenderedImage finalRef = MosaicDescriptor.create(refImgs,
                     MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null,
                     background, hints);
@@ -570,16 +572,17 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     }
         			return result;
                 case 12: // LABEL = "Simulate new urbanization", must be run after fragmentation?
-                    int j = 0;  // fictitious admin unit
                     int i = 0;  // fictitious year
-                    // NOTE:
-                    //  This index should be run after fragmentation using one year!!
-                    //      --> this way I take rural & ray_pixels/RADIUS from previous run! (I can anyway set default values for both)
-                    //      --> I should use also the same beans as before
-                    
-                    // I have to wrap any following class in a dedicated class for new urbanization process
-                    // in order to calculate the required specific inputs!!
-                    result[j][i] = CUDAClass.newUrbanization( beans, rural, ray_pixels, i, j );
+                	for (int j = 0; j < n_adm_units; j++) {
+                        // NOTE:
+                        //  This index should be run after fragmentation using one year!!
+                        //      --> this way I take rural & ray_pixels/RADIUS from previous run! (I can anyway set default values for both)
+                        //      --> I should use also the same beans as before
+                        
+                        // I have to wrap any following class in a dedicated class for new urbanization process
+                        // in order to calculate the required specific inputs!!
+                        result[j][i] = CUDAClass.newUrbanization( beans, rural, ray_pixels, i, j );                		
+                	}
                     return result;
         	}
 		return null;
@@ -598,15 +601,32 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @throws TransformException
      */
     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
-            Geometry geo, MathTransform transform) throws IOException,
+            Geometry geo, MathTransform transform, int buffer) throws IOException,
             MismatchedDimensionException, TransformException {
     	
-        // 1) Crop the two coverages with the selected Geometry
-        GridCoverage2D crop = CROP.execute(coverage, geo, null);
-        transform = ProjectiveTransform.create((AffineTransform)crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER)).inverse();
+    	RenderedImage image = coverage.getRenderedImage();
 
-        // 2) Extract the BufferedImage from each image
-        RenderedImage image = crop.getRenderedImage();
+    	// 0) Check if a buffer must be applied
+    	Geometry originalGeo = (Geometry) geo.clone();
+    	if (buffer > 0) {
+        	try {
+				if (!"EPSG:4326".equals(CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
+					geo = geo.buffer(buffer);
+				} else {
+					geo = geo.buffer(buffer / 111.128);
+				}
+			} catch (FactoryException e) {
+				geo = geo.buffer(buffer);
+			}
+    	}
+    	
+		// 1) Crop the two coverages with the selected Geometry
+		GridCoverage2D crop = CROP.execute(coverage, geo, null);
+		transform = ProjectiveTransform.create((AffineTransform)crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER)).inverse();
+		
+		// 2) Extract the BufferedImage from each image
+		image = crop.getRenderedImage();
+        
         Rectangle rectIMG = new Rectangle(image.getMinX(), image.getMinY(), image.getWidth(),
                 image.getHeight());
         ImageWorker w = new ImageWorker(image);
@@ -623,10 +643,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         if (reference) {
             // 4) Transform the Geometry to Raster space
             Geometry rs = JTS.transform(geo, transform);
+            Geometry rsFilter = JTS.transform(geo.difference(originalGeo), transform);
             ROI roiGeo = new ROIGeometry(rs);
+            ROI roiFilter = new ROIGeometry(rsFilter);
 
             // 5) Extract an array of data from the transformed ROI
-            byte[] roiData = getROIData(roiGeo, rectIMG);
+            byte[] roiData = getROIData((buffer>0?roiFilter:roiGeo), rectIMG);
             bean.setRoi(roiData);
             bean.setRoiObj(roiGeo);
 

@@ -121,7 +121,7 @@ public class JiffleScriptListProcess implements GSProcess {
                 jb.clear();
             }
 
-            RenderedOp img = BandMergeDescriptor.create(null, 0, true, hints, inputs);
+            RenderedOp img = BandMergeDescriptor.create(null, 0, hints, inputs);
 
             // Creation of the GridGeometry associated to the final image
             final GridGeometry2D gg2d = new GridGeometry2D(new GridEnvelope2D(PlanarImage

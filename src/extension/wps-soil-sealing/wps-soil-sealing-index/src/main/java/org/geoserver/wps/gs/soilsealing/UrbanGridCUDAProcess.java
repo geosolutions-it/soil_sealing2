@@ -286,21 +286,15 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 //		System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
 		Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
         
-		// URBAN DIFFUSION
-        if (index==7){
-            double[][][] values = (double[][][]) output;
-            statsRef = values[0][0];
-            statsNow = values[0].length > 1 ? values[0][1] : null;
-        }
         // For index 8 calculate the final Image
-        else if (index == 8 || index == 9 || index == 12) {
+        if (index == 8 || index == 9 || index == 12) {
         	
         	System.out.println("rural="+rural + " -- radius/buffer="+radius+" [m]");
         	
             List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
             double[][][] images = (double[][][]) output;
-            double[][] refData = images[0];
+            
             int numGeo = beans.size();
             // Images to mosaic
             RenderedImage[] refImgs = new RenderedImage[numGeo];
@@ -308,8 +302,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
             // Giuliano tested for 91 municipalities in NAPLES and it FAILED within the following FOR loop!!
             for (int i = 0; i < numGeo; i++) {
+            	double[][] refData = images[i];
                 CUDABean bean = beans.get(i);
-                double[] data = refData[i];
+                double[] data = refData[0];
                 if (data != null) {
                     Rectangle rect = new Rectangle(bean.getMinX(), bean.getMinY(), bean.getWidth(),
                             bean.getHeight());
@@ -374,8 +369,16 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
         else {
             double[][][] values = (double[][][]) output;
-            statsRef = values[0][0];
-            statsNow = values[0].length > 1 ? values[0][1] : null;
+            statsRef = new double[values.length];
+            statsNow = (values[0][0].length > 1 ? new double[values.length] : null);
+            
+            for (int v=0; v<values.length; v++)
+            {
+                statsRef[v] = values[v][0][0];
+                if (values[v][0].length > 1) {
+                	statsNow[v] = values[v][0][1];
+                }
+            }
         }
 
         // Result accumulation

@@ -244,7 +244,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // merge USE_JAI_IMAGEREAD to false if needed
             params = CoverageUtilities.replaceParameter(params, ImageMosaicFormat.USE_JAI_IMAGEREAD.getDefaultValue(), ImageMosaicFormat.USE_JAI_IMAGEREAD);
             
-            GridGeometry2D gridROI = createGridROI(ciReference, rois, true, referenceCrs, null);
+            GridGeometry2D gridROI = createGridROI(ciReference, rois, true, referenceCrs, null, false);
 
             if (gridROI != null) {
                 params = CoverageUtilities.replaceParameter(params, gridROI,

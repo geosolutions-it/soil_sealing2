@@ -277,7 +277,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             
 			// Creation of a GridGeometry object used for forcing the reader to read only the active zones
             final Double buffer = (index == 12 ? radius : 0.0);
-            final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer);
+            final boolean mergeGeometries = (index == 5 || index == 6 || index == 7 || index == 10 || index == 11 ? false : true);
+            final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer, mergeGeometries);
 
             if (gridROI != null) {
                 params = CoverageUtilities.replaceParameter(params, gridROI,
@@ -477,6 +478,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             // //////////////////////////////////////////////////////////////////////
             return soilSealingIndexResult;
         } catch (Exception e) {
+        	
+        	e.printStackTrace();
 
             if (features != null) {
                 // //////////////////////////////////////////////////////////////////////

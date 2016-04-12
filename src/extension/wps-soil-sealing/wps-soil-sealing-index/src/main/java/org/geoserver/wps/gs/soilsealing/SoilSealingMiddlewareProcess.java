@@ -301,7 +301,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @throws Exception
      */
     protected GridGeometry2D createGridROI(CoverageInfo ciReference, List<Geometry> rois,
-            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs, final Double buffer) 
+            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs, final Double buffer, boolean mergeGeometries) 
                     throws TransformException, FactoryException, Exception {
         // Creation of a Geometry union for cropping the input coverages
         Geometry union = null;
@@ -331,52 +331,44 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 }
             }
             
-            if (buffer != null && buffer > 0) {
-            	if (roiUnion == null) {
-            		roiUnion = geo;
-            	} else {
-            		roiUnion = roiUnion.union(geo);
-            	}
+            if (roiUnion == null) {
+            	roiUnion = geo;
+            } else {
+            	roiUnion = roiUnion.union(geo);
             }
         }
 
-        if (buffer != null && buffer > 0 && !roiUnion.isEmpty()) {
+        if (mergeGeometries && !roiUnion.isEmpty()) {
             com.vividsolutions.jts.geom.Envelope envelope = roiUnion.getEnvelopeInternal();
             
-        	if (!"EPSG:4326".equals(ciReference.getSRS())) {
-        		envelope.expandBy(buffer);
-            	roiBuffer = roiUnion.buffer(buffer);
-        	} else {
-        		envelope.expandBy(buffer / 111.128);
-        		roiBuffer = roiUnion.buffer(buffer / 111.128);
-        	}
-        	        	
-        	if (toRasterSpace) {
-        		Geometry projected = JTS.transform(roiBuffer,
-        				ProjectiveTransform.create(gridToWorldCorner));
-        		union = union.union(projected);
-        	} else {
-        		union = union.union(roiBuffer);
-        	}
+            if (buffer != null && buffer > 0) {
+	        	if (!"EPSG:4326".equals(ciReference.getSRS())) {
+	        		envelope.expandBy(buffer);
+	            	roiBuffer = roiUnion.buffer(buffer);
+	        	} else {
+	        		envelope.expandBy(buffer / 111.128);
+	        		roiBuffer = roiUnion.buffer(buffer / 111.128);
+	        	}
 
+	        	if (union == null) {
+	                if (toRasterSpace) {
+	                    union = JTS.transform(roiBuffer, ProjectiveTransform.create(gridToWorldCorner));
+	                } else {
+	                    union = roiBuffer;
+	                }
+	            } else {
+	                if (toRasterSpace) {
+	                    Geometry projected = JTS.transform(roiBuffer,
+	                            ProjectiveTransform.create(gridToWorldCorner));
+	                    union = union.union(projected);
+	                } else {
+	                    union = union.union(roiBuffer);
+	                }
+	            }
+            }
+            
         	rois.clear();
         	rois.add(roiUnion);
-        	
-        	if (union == null) {
-                if (toRasterSpace) {
-                    union = JTS.transform(roiBuffer, ProjectiveTransform.create(gridToWorldCorner));
-                } else {
-                    union = roiBuffer;
-                }
-            } else {
-                if (toRasterSpace) {
-                    Geometry projected = JTS.transform(roiBuffer,
-                            ProjectiveTransform.create(gridToWorldCorner));
-                    union = union.union(projected);
-                } else {
-                    union = union.union(roiBuffer);
-                }
-            }
         }        
 
         // Setting of the final srID and reproject to the final CRS

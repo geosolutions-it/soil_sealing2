@@ -402,10 +402,11 @@ public class UrbanGridProcess implements GSProcess {
         	
         } else {
             // check on the dimensions
-            if (numGeo != now.length || numGeo != reference.length) {
+            /*if (numGeo != now.length || numGeo != reference.length) {
                 throw new ProcessException(
                         "Geometries and their results don't have the same dimensions");
-            }
+            }*/
+        	
             // For each Geometry a container is created
             for (int i = 0; i < numGeo; i++) {
                 // Selection of the geometry

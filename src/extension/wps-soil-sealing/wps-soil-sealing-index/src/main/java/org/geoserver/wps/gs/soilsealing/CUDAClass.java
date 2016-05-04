@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -133,7 +134,7 @@ public class CUDAClass {
 	 * @return
 	 * @throws FileNotFoundException
 	 */
-	public static double urban_sprawl(List<CUDABean> beans,
+	public double urban_sprawl(List<CUDABean> beans,
 			double areaOfOnePixel, int year, int admin_unit, int Distribution)
 			throws FileNotFoundException {
 		// urban sprawl = SUD / SUT;
@@ -143,7 +144,7 @@ public class CUDAClass {
 		int SUD = 0;
 
 		// **SUD**
-		Map<String, Object> result = CUDAClass.ccl_1toN_hist(beans, year, admin_unit);
+		Map<String, Object> result = ccl_1toN_hist(beans, year, admin_unit);
 		// **SUT**
 		int SUTval = SUT(beans, year, admin_unit);
 
@@ -218,7 +219,7 @@ public class CUDAClass {
 		return I_07a_UrbanArea;
 	}
 
-	public static double highest_polygon_ratio(List<CUDABean> beans,
+	public double highest_polygon_ratio(List<CUDABean> beans,
 			double areaOfOnePixel, int year, int admin_unit)
 			throws FileNotFoundException {
 		// highest polygon ratio = S_poly_max / SUT;
@@ -226,7 +227,7 @@ public class CUDAClass {
 		// SUT = reduce6(BIN*ROI) * cellsize;
 
 		// **S_poly_max**
-		Map<String, Object> result = CUDAClass.ccl_1toN_hist(beans, year,
+		Map<String, Object> result = ccl_1toN_hist(beans, year,
 				admin_unit);
 		// **SUT**
 		int SUTval = SUT(beans, year, admin_unit);
@@ -246,7 +247,7 @@ public class CUDAClass {
 		return I_07b_HighestPolygonRatio;
 	}
 
-	public static double others_polygons_avesurf(List<CUDABean> beans,
+	public double others_polygons_avesurf(List<CUDABean> beans,
 			double areaOfOnePixel, int year, int admin_unit)
 			throws FileNotFoundException {
 		// others polygons avesurf = S_poly_~max / N_poly_~max;
@@ -257,7 +258,7 @@ public class CUDAClass {
 		double S_poly_notmax = 0;
 
 		// **S_poly_~max**
-		Map<String, Object> result = CUDAClass.ccl_1toN_hist(beans, year,
+		Map<String, Object> result = ccl_1toN_hist(beans, year,
 				admin_unit);
 
 		// **N_poly_~max**
@@ -283,7 +284,7 @@ public class CUDAClass {
 		return I_07c_OthersPolygonRatio;
 	}
 
-	public static double[] modelUrbanDevelopment(List<CUDABean> beans,
+	public double[] modelUrbanDevelopment(List<CUDABean> beans,
 			double areaOfOnePixel, int year, int admin_unit) throws IOException {
 
 		int ii = 0;
@@ -295,7 +296,7 @@ public class CUDAClass {
 		int SUTval = 0;
 
 		// **CCL/HIST**
-		Map<String, Object> result = CUDAClass.ccl_1toN_hist(beans, year,
+		Map<String, Object> result = ccl_1toN_hist(beans, year,
 				admin_unit);
 		// **SUT**
 		SUTval = SUT(beans, year, admin_unit);
@@ -361,7 +362,7 @@ public class CUDAClass {
 	 *            calculation
 	 * @return :: SUT which is the sum of BINf (=BIN*ROI)
 	 */
-	private static int SUT(List<CUDABean> beans, int year, int admin_unit) {
+	public static int SUT(List<CUDABean> beans, int year, int admin_unit) {
 		/**
 		 * NOTES Now the algorithm works fine both in CUDA-C and in JCuda
 		 * versions
@@ -379,7 +380,7 @@ public class CUDAClass {
 		CUdeviceptr dev_BINf = null;
 		CUdeviceptr d_SUT = null;
 
-		int gpuDeviceCount[] = { 0 };
+		//int gpuDeviceCount[] = { 0 };
 		int elapsed_time = 0;
 		// count the number of kernels that must print their output:
 		int count_print = 0;
@@ -387,35 +388,13 @@ public class CUDAClass {
 		int SUT = 0;
 
 		try {
-			/*
-			 * ESTABILISH CONTEXT
-			 */
-			JCudaDriver.setExceptionsEnabled(true);
-			// Initialise the driver:
-			// err =
-			cuInit(0);
-	
-			/*
-			 * RECOGNIZE DEVICE(s) EXISTENCE:
-			 */
-			/*
-			 * if (err == CUDA_SUCCESS)
-			 * CUDA_CHECK_RETURN(cuDeviceGetCount(gpuDeviceCount)); if (deviceCount
-			 * == 0) { System.out.println("Error: no devices supporting CUDA\n");
-			 * exit(-1); }
-			 */
-			// Obtain the number of devices
-			cuDeviceGetCount(gpuDeviceCount);
-			int deviceCount = gpuDeviceCount[0];
-			if (deviceCount == 0) {
-				throw new ProcessException("Error: no devices supporting CUDA.");
-			}
+			int deviceCount = getGPUDeviceCount();
 	
 			/*
 			 * SELECT THE FIRST DEVICE (but I should select/split devices according
 			 * to streams)
 			 */
-			int selDev = UrbanGridCUDAProcess.gpuDevice;
+			int selDev = getRandomGpuDevice(deviceCount);
 			CUdevice device = new CUdevice();
 			cuDeviceGet(device, selDev);
 			// Query some useful properties:
@@ -604,7 +583,7 @@ public class CUDAClass {
 	 * @return :: a list with three objects: (1) a histogram counts, (2) No. of
 	 *         bins, and (3) a map of labels.
 	 */
-	private static Map<String, Object> ccl_1toN_hist(List<CUDABean> beans,
+	private Map<String, Object> ccl_1toN_hist(List<CUDABean> beans,
 			int year, int admin_unit) {
 		/**
 		 * Copyright 2016 Giuliano Langella: ---- check Jcuda version!! ----
@@ -639,752 +618,773 @@ public class CUDAClass {
 		 * pixels).
 		 */
 
-		/*
-		 * PARAMETERS
-		 */
-		CUresult err;
-		CUcontext context = null;
-		CUmodule module = null;
-		/*
-		 * GPU ARRAYS use CUDA_CHECK_RETURN() for all calls.
-		 */
-		// get pointers
-		CUdeviceptr urban_gpu 		= null;
-		CUdeviceptr d_BINf 			= null;
-		CUdeviceptr dev_ROI 		= null;
-		CUdeviceptr lab_mat_gpu 	= null;
-		CUdeviceptr lab_mat_gpu_1N 	= null;
-		CUdeviceptr lab_mat_gpu_f 	= null;
-		CUdeviceptr bins_gpu 		= null;
-		CUdeviceptr d_histogram 	= null;
-		
-		
-		int gpuDeviceCount[] = { 0 };
-		int elapsed_time = 0;
-		// count the number of kernels that must print their output:
-		int count_print = 0;
-		// floor(sqrt(devProp.maxThreadsPerBlock));
-		int sqrt_nmax_threads = BLOCKDIM_X_ccl;
-
-		try{
+		synchronized (this) {
 			/*
-			 * ESTABILISH CONTEXT
+			 * PARAMETERS
 			 */
-			JCudaDriver.setExceptionsEnabled(true);
-			// Initialise the driver:
-			//err = 
-			cuInit(0);
-	
-			/*
-			 * RECOGNIZE DEVICE(s) EXISTENCE:
-			 */
-			/*
-			 * if (err == CUDA_SUCCESS)
-			 * CUDA_CHECK_RETURN(cuDeviceGetCount(gpuDeviceCount)); if (deviceCount
-			 * == 0) { System.out.println("Error: no devices supporting CUDA\n");
-			 * exit(-1); }
-			 */
-			// Obtain the number of devices
-			cuDeviceGetCount(gpuDeviceCount);
-			int deviceCount = gpuDeviceCount[0];
-			if (deviceCount == 0) {
-				throw new ProcessException("Error: no devices supporting CUDA.");
-			}
-			/*
-			 * SELECT THE FIRST DEVICE (but I should select/split devices according
-			 * to streams)
-			 */
-			int selDev = UrbanGridCUDAProcess.gpuDevice;
-			CUdevice device = new CUdevice();
-			cuDeviceGet(device, selDev);
-			// Query some useful properties:
-			int amountProperty[] = { 0 };
-			// -1-
-			cuDeviceGetAttribute(amountProperty,
-					CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
-			int maxThreadsPerBlock = amountProperty[0];
-			// -2-
-			cuDeviceGetAttribute(amountProperty,
-					CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
-			int MaxGridDimX = amountProperty[0];
-			// -3-
-			cuDeviceGetAttribute(amountProperty,
-					CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device);
-			int N_sm = amountProperty[0];
-			// -4-
-			cuDeviceGetAttribute(amountProperty,
-					CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, device);
-			int max_threads_per_SM = amountProperty[0];
-			// -5-
-			cuDeviceGetAttribute(amountProperty,
-					CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK, device);
-			int sharedMemPerBlock = amountProperty[0];
-	
-			/*
-			 * CREATE THE CONTEXT (for currently selected device)
-			 */
-			context = new CUcontext();
-			// int cuCtxCreate_STATUS =
-			cuCtxCreate(context, selDev, device);
-			// Load the ptx file:
-			module = new CUmodule();
-			cuModuleLoad(module, PTXFILE_ccl_1toN_hist);// run grep -in entry
-														// ccl.ptx
-			/*
-			 * ENTRY POINTS (obtain function pointers to the entry kernels) -0-
-			 * _Z10filter_roiPhPKhj -1- _Z19intra_tile_labelingPKhjjjjPj -2-
-			 * _Z15stitching_tilesPjjjj -3- _Z16root_equivalencePjjjj -4-
-			 * _Z19intra_tile_re_labeljjPj -5- _Z12count_labelsjjPKjPj -6-
-			 * _Z14labels__1_to_NjjPKjPjS1_jjS1_S1_ -7-
-			 * _Z22intratile_relabel_1toNjjPKjPj -8-
-			 * _Z20del_duplicated_linesPKjjjPjjj -9- _Z15histogram_shmemPKjPKhPjjj
-			 * -9- _Z9histogramPKjPKhPjjj
-			 */
-			// -0-
-			CUfunction F_filter_roi = new CUfunction();
-			cuModuleGetFunction(F_filter_roi, module, "_Z10filter_roiPhPKhj");
-			// -1-
-			CUfunction F_intra_tile_labeling = new CUfunction();
-			cuModuleGetFunction(F_intra_tile_labeling, module,
-					"_Z19intra_tile_labelingPKhjjjjPj");
-			// -2-
-			CUfunction F_stitching_tiles = new CUfunction();
-			cuModuleGetFunction(F_stitching_tiles, module,
-					"_Z15stitching_tilesPjjjj");
-			// -3-
-			CUfunction F_root_equivalence = new CUfunction();
-			cuModuleGetFunction(F_root_equivalence, module,
-					"_Z16root_equivalencePjjjj");
-			// -4-
-			CUfunction F_intra_tile_re_label = new CUfunction();
-			cuModuleGetFunction(F_intra_tile_re_label, module,
-					"_Z19intra_tile_re_labeljjPj");
-			// -5-
-			CUfunction F_count_labels = new CUfunction();
-			cuModuleGetFunction(F_count_labels, module, "_Z12count_labelsjjPKjPj");
-			// -6-
-			CUfunction F_labels__1_to_N = new CUfunction();
-			cuModuleGetFunction(F_labels__1_to_N, module,
-					"_Z14labels__1_to_NjjPKjPjS1_jjS1_S1_");
-			// -7-
-			CUfunction F_intratile_relabel_1toN = new CUfunction();
-			cuModuleGetFunction(F_intratile_relabel_1toN, module,
-					"_Z22intratile_relabel_1toNjjPKjPj");
-			// -8-
-			CUfunction F_del_duplicated_lines = new CUfunction();
-			cuModuleGetFunction(F_del_duplicated_lines, module,
-					"_Z20del_duplicated_linesPKjjjPjjj");
-			// -9a-
-			CUfunction F_histogram_shmem = new CUfunction();
-			cuModuleGetFunction(F_histogram_shmem, module,
-					"_Z15histogram_shmemPKjPKhPjjj");
-			// -9b-
-			CUfunction F_histogram = new CUfunction();
-			cuModuleGetFunction(F_histogram, module, "_Z9histogramPKjPKhPjjj");
-	
-			/*
-			 * ALLOCATION
-			 */
-			int WIDTH = beans.get(admin_unit).width;
-			int HEIGHT = beans.get(admin_unit).height;
-			int map_len = WIDTH * HEIGHT;
-			int tiledimX = sqrt_nmax_threads;
-			int tiledimY = sqrt_nmax_threads;
-			// I need to add a first row of zeros, to let the kernels work fine also
-			// at location (0,0),
-			// where the LABEL cannot be different from zero (the LABEL is equal to
-			// thread absolute position).
-			int HEIGHT_1 = HEIGHT + 1;
-			// X-dir of extended array
-			int ntilesX = (int) Math.ceil((double) (WIDTH - 1)
-					/ (double) (tiledimX - 1));
-			int ntX_less = (int) Math.floor((double) (WIDTH - 1)
-					/ (double) (tiledimX - 1));
-			int WIDTH_e = (ntilesX - ntX_less) + (ntX_less * tiledimX)
-					+ (WIDTH - 1 - ntX_less * (tiledimX - 1));
-			// Y-dir of extended array
-			int ntilesY = (int) Math.ceil((double) (HEIGHT_1 - 1)
-					/ (double) (tiledimY - 1));
-			int ntY_less = (int) Math.floor((double) (HEIGHT_1 - 1)
-					/ (double) (tiledimY - 1));
-			int HEIGHT_e = (ntilesY - ntY_less) + (ntY_less * tiledimY)
-					+ (HEIGHT_1 - 1 - ntY_less * (tiledimY - 1));
-			/* ....::: DIM of ARRAYS in BYTES :::.... */
-			long sizeChar = WIDTH * HEIGHT * Sizeof.BYTE; // it does not need the
-															// offset
-			long sizeChar_o = WIDTH * HEIGHT_1 * Sizeof.BYTE; // it accounts for the
-																// offset
-			// long sizeUintL = WIDTH * HEIGHT_1 * sizeof.byte;
-			long sizeUintL_s = WIDTH * HEIGHT * Sizeof.INT;
-			long sizeUintL_e = WIDTH_e * HEIGHT_e * Sizeof.INT; // the offset is
-																// considered (using
-																// HEIGHT_1 to
-																// define HEIGHT_e)
-			long sizeBins = ntilesX * ntilesY * Sizeof.INT;
-	
-			/*
-			 * CPU ARRAYS
-			 */
-			int lab_mat_cpu[] = new int[WIDTH_e * HEIGHT_e];
-			int lab_mat_cpu_f[] = new int[WIDTH * HEIGHT];
-			int bins_cpu[] = new int[ntilesX * ntilesY];
-			int cumsum[] = new int[ntilesX * ntilesY];
-			byte TMP[] = new byte[WIDTH * HEIGHT];
-			byte urban_cpu[] = new byte[WIDTH * HEIGHT_1];
-			byte h_binroi_1[] = new byte[WIDTH * HEIGHT_1];
-			cuMemAllocHost(Pointer.to(lab_mat_cpu), sizeUintL_e);
-			cuMemAllocHost(Pointer.to(lab_mat_cpu_f), sizeUintL_s);
-			cuMemAllocHost(Pointer.to(bins_cpu), sizeBins);
-			cuMemAllocHost(Pointer.to(cumsum), sizeBins);
-			cuMemAllocHost(Pointer.to(TMP), sizeChar);
-			cuMemAllocHost(Pointer.to(urban_cpu), sizeChar_o);
-			cuMemAllocHost(Pointer.to(h_binroi_1), sizeChar_o);
-			// Arrays.fill( TMP, (byte) 0 );
-	
+			CUresult err;
+			CUcontext context = null;
+			CUmodule module = null;
 			/*
 			 * GPU ARRAYS use CUDA_CHECK_RETURN() for all calls.
 			 */
 			// get pointers
-			urban_gpu = new CUdeviceptr();
-			d_BINf = new CUdeviceptr();
-			dev_ROI = new CUdeviceptr();
-			lab_mat_gpu = new CUdeviceptr();
-			lab_mat_gpu_1N = new CUdeviceptr();
-			lab_mat_gpu_f = new CUdeviceptr();
-			bins_gpu = new CUdeviceptr();
-			// allocate in mem
-			cuMemAlloc(urban_gpu, sizeChar_o);
-			cuMemAlloc(d_BINf, sizeChar);
-			cuMemAlloc(dev_ROI, sizeChar_o);
-			cuMemAlloc(lab_mat_gpu, sizeUintL_e);
-			cuMemAlloc(lab_mat_gpu_1N, sizeUintL_e);
-			cuMemAlloc(lab_mat_gpu_f, sizeUintL_s);
-			cuMemAlloc(bins_gpu, sizeBins);
-			// set mem
-			cudaMemset(urban_gpu, 0, sizeChar_o);
-			cudaMemset(d_BINf, 0, sizeChar);
-			cudaMemset(dev_ROI, 0, sizeChar_o);
-			cudaMemset(bins_gpu, 0, sizeBins);
-			cudaMemset(lab_mat_gpu, 0, sizeUintL_e);
-			cudaMemset(lab_mat_gpu_1N, 0, sizeUintL_e);
-			cudaMemset(lab_mat_gpu_f, 0, sizeUintL_s);
-			/*
-			 * MEM COPY H2D
-			 */
-	
-			Arrays.fill(h_binroi_1, (byte) 0);
-	
-			if (year == 0) {
-				System.arraycopy(beans.get(admin_unit).getReferenceImage(), 0,
-						h_binroi_1, WIDTH, map_len);
-				cuMemcpyHtoD(urban_gpu, Pointer.to(h_binroi_1), sizeChar_o);
-			} else if (year == 1) {
-				System.arraycopy(beans.get(admin_unit).getCurrentImage(), 0,
-						h_binroi_1, WIDTH, map_len);
-				cuMemcpyHtoD(urban_gpu, Pointer.to(h_binroi_1), sizeChar_o);
-			} else if (year == 2) {
-				// do nothing because the DIFF is calculated in JAVA ==> make the
-				// JCuda/Cuda version to speedup computation!!
-	
-				/*
-				 * System.out.println(
-				 * "You should implement in CUDA the difference between ref & curr!!"
-				 * ); for(int ii=0;ii<map_len;ii++){ host_PERI[ii] =
-				 * beans.get(admin_unit
-				 * ).referenceImage[ii]-beans.get(admin_unit).getCurrentImage()[ii];
-				 * } return host_PERI;
-				 */}
-			Arrays.fill(h_binroi_1, (byte) 0);
-			System.arraycopy(beans.get(admin_unit).roi, 0, h_binroi_1, WIDTH,
-					map_len);
-			cuMemcpyHtoD(dev_ROI, Pointer.to(h_binroi_1), sizeChar_o);
-	
-			/*
-			 * KERNELS GEOMETRY NOTE: use ceil() instead of the "%" operator!!!
-			 */
-			int sh_mem = (tiledimX * tiledimY) * (Sizeof.INT);
-			char sh_mem_f = (threads_ccl) * (Sizeof.BYTE);
-	
-			int num_blocks_per_SM = max_threads_per_SM / threads_ccl;// e.g.
-																		// 1536/512
-																		// = 3
-			int Nblks_per_grid = N_sm * num_blocks_per_SM;
-			int mapel_per_thread = (int) Math.ceil((double) map_len
-					/ (double) ((threads_ccl * 2) * Nblks_per_grid));// e.g. n /
-																		// (14*3*512*2)
-	
-			/*
-			 * KERNELS INVOCATION
-			 */
-			// ***00***
-			// filter_roi<<<dimGrid,dimBlock>>>(urban_gpu,dev_ROI,map_len);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_00 = Pointer
-					.to(Pointer.to(urban_gpu), Pointer.to(dev_ROI),
-							Pointer.to(new int[] { WIDTH * HEIGHT_1 }));
-			// Call the kernel function.
-			cuLaunchKernel(F_filter_roi, Nblks_per_grid, 1, 1, // Grid dimension ::
-																// dimGrid(
-																// Nblks_per_grid,
-																// 1, 1 )
-					threads_ccl, 1, 1, // Block dimension :: dimBlock( threads_ccl,
-										// 1, 1 )
-					0, null, // Shared memory size and stream
-					kern_00, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			// ***01***
-			// intra_tile_labeling<<<grid,block,sh_mem>>>(urban_gpu,WIDTH,HEIGHT_1,WIDTH_e,HEIGHT_e,lab_mat_gpu);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_01 = Pointer.to(Pointer.to(urban_gpu),
-					Pointer.to(new int[] { WIDTH }),
-					Pointer.to(new int[] { HEIGHT_1 }),
-					Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu));
-			// Call the kernel function.
-			cuLaunchKernel(F_intra_tile_labeling, ntilesX, ntilesY, 1, // Grid
-																		// dimension
-																		// ::
-																		// grid(ntilesX,ntilesY,1)
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					sh_mem, null, // Shared memory size and stream
-					kern_01, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-			if (UrbanGridCUDAProcess.TESTING) {
-				try {
-					Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
-							Pointer.to(new int[] { WIDTH_e }),
-							Pointer.to(new int[] { HEIGHT_e }),
-							Pointer.to(lab_mat_gpu_f),
-							Pointer.to(new int[] { WIDTH }),
-							Pointer.to(new int[] { HEIGHT }));
-					// Call the kernel function.
-					cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
-																				// dimension
-																				// ::
-																				// grid(ntilesX,ntilesY,1);
-							tiledimX, tiledimY, 1, // Block dimension ::
-													// block(tiledimX,tiledimY,1);
-							0, null, // Shared memory size and stream
-							kern_08, null // Kernel- and extra parameters
-					);
-					cuCtxSynchronize();
-					// end_t = clock();
-					// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-					// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000
-					// ));
-					// elapsed_time += (int)( (double)(end_t - start_t ) /
-					// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-					cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f,
-							sizeUintL_s);
-	
-					UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH,
-							HEIGHT, lab_mat_cpu_f, DataBuffer.TYPE_INT,
-							"ssgci__intra_tile_labeling");
-	
-				} catch (IOException e) {
-					LOGGER.log(Level.WARNING,
-							"Could not save GeoTIFF Sample for testing", e);
-				}
-			}
-	
-			// ***02***
-			// stitching_tiles<<<grid,block_2>>>(lab_mat_gpu,tiledimY, WIDTH_e,
-			// HEIGHT_e);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_02 = Pointer.to(Pointer.to(lab_mat_gpu),
-					Pointer.to(new int[] { tiledimY }),
-					Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }));
-			// Call the kernel function.
-			cuLaunchKernel(F_stitching_tiles, ntilesX, ntilesY, 1, // Grid dimension
-																	// ::
-																	// grid(ntilesX,ntilesY,1)
-					tiledimX, 1, 1, // Block dimension :: block_2(tiledimX,1,1); //
-									// ==> this is only possible if the block is
-									// squared !!!!!!!! Because I use the same
-									// threads for cols & rows
-					0, null, // Shared memory size and stream
-					kern_02, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			// ***03***
-			// root_equivalence<<<grid_2,block_2>>>(lab_mat_gpu,tiledimY, WIDTH_e,
-			// HEIGHT_e);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_03 = Pointer.to(Pointer.to(lab_mat_gpu),
-					Pointer.to(new int[] { tiledimY }),
-					Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }));
-			// Call the kernel function.
-			cuLaunchKernel(F_root_equivalence, ntilesX, ntilesY, 1, // Grid
-																	// dimension ::
-																	// grid_2(ntilesX,ntilesY,1);
-					tiledimX, 1, 1, // Block dimension :: block_2(tiledimX,1,1); //
-									// ==> this is only possible if the block is
-									// squared !!!!!!!! Because I use the same
-									// threads for cols & rows
-					0, null, // Shared memory size and stream
-					kern_03, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			// ***04***
-			// intra_tile_re_label<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_04 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu));
-			// Call the kernel function.
-			cuLaunchKernel(F_intra_tile_re_label, ntilesX, ntilesY, 1, // Grid
-																		// dimension
-																		// ::
-																		// grid(ntilesX,ntilesY,1);
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					sh_mem, null, // Shared memory size and stream
-					kern_04, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-			if (UrbanGridCUDAProcess.TESTING) {
-				try {
-					Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
-							Pointer.to(new int[] { WIDTH_e }),
-							Pointer.to(new int[] { HEIGHT_e }),
-							Pointer.to(lab_mat_gpu_f),
-							Pointer.to(new int[] { WIDTH }),
-							Pointer.to(new int[] { HEIGHT }));
-					// Call the kernel function.
-					cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
-																				// dimension
-																				// ::
-																				// grid(ntilesX,ntilesY,1);
-							tiledimX, tiledimY, 1, // Block dimension ::
-													// block(tiledimX,tiledimY,1);
-							0, null, // Shared memory size and stream
-							kern_08, null // Kernel- and extra parameters
-					);
-					cuCtxSynchronize();
-					// end_t = clock();
-					// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-					// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000
-					// ));
-					// elapsed_time += (int)( (double)(end_t - start_t ) /
-					// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-					cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f,
-							sizeUintL_s);
-					UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH,
-							HEIGHT, lab_mat_cpu_f, DataBuffer.TYPE_INT,
-							"ssgci__Lrand");
-	
-				} catch (IOException e) {
-					LOGGER.log(Level.WARNING,
-							"Could not save GeoTIFF Sample for testing", e);
-				}
-			}
-	
-			// ***05***
-			// count_labels<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu,bins_gpu);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_05 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
-					Pointer.to(bins_gpu));
-			// Call the kernel function.
-			cuLaunchKernel(F_count_labels, ntilesX, ntilesY, 1, // Grid dimension ::
-																// grid(ntilesX,ntilesY,1);
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					sh_mem, null, // Shared memory size and stream
-					kern_05, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-			cuMemcpyDtoH(Pointer.to(bins_cpu), bins_gpu, sizeBins);
-			cumsum[0] = 0;
-			int Nbins = bins_cpu[0];
-			for (int ii = 1; ii < ntilesX * ntilesY; ii++) {
-				cumsum[ii] = Nbins;
-				Nbins += bins_cpu[ii];
-			}
-			int Nbins_0 = Nbins + 1;// I count also the ZERO!
-	
-			// ***06***
-			// labels__1_to_N<<<grid,block,sh_mem>>>( WIDTH_e, HEIGHT_e,
-			// lab_mat_gpu, lab_mat_gpu_1N, bins_gpu, Nbins, bdx_e, ID_rand_gpu,
-			// ID_1toN_gpu );
-			CUdeviceptr ID_rand_gpu = new CUdeviceptr();
-			CUdeviceptr ID_1toN_gpu = new CUdeviceptr();
-			cuMemAlloc(ID_rand_gpu, Nbins * Sizeof.INT);
-			cuMemAlloc(ID_1toN_gpu, Nbins * Sizeof.INT);
-			cuMemcpyHtoD(bins_gpu, Pointer.to(cumsum), sizeBins);
-			int bdx_e = WIDTH_e - (ntilesX - 1) * tiledimX;
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_06 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
-					Pointer.to(lab_mat_gpu_1N), Pointer.to(bins_gpu),
-					Pointer.to(new int[] { Nbins }),
-					Pointer.to(new int[] { bdx_e }), Pointer.to(ID_rand_gpu),
-					Pointer.to(ID_1toN_gpu));
-			// Call the kernel function.
-			cuLaunchKernel(F_labels__1_to_N, ntilesX, ntilesY, 1, // Grid dimension
-																	// ::
-																	// grid(ntilesX,ntilesY,1);
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					sh_mem, null, // Shared memory size and stream
-					kern_06, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			if (UrbanGridCUDAProcess.TESTING) {
-				try {
-					int ID_rand_cpu[] = new int[Nbins];
-					int ID_1toN_cpu[] = new int[Nbins];
-					cuMemAllocHost(Pointer.to(ID_rand_cpu), Nbins * Sizeof.INT);
-					cuMemAllocHost(Pointer.to(ID_1toN_cpu), Nbins * Sizeof.INT);
-					cuMemcpyDtoH(Pointer.to(ID_rand_cpu), ID_rand_gpu, Nbins
-							* Sizeof.INT);
-					cuMemcpyDtoH(Pointer.to(ID_1toN_cpu), ID_1toN_gpu, Nbins
-							* Sizeof.INT);
-					storePlainTextSampleFile(ID_rand_cpu, "ssgci_ID_rand_cpu");
-					storePlainTextSampleFile(ID_1toN_cpu, "ssgci_ID_1toN_cpu");
-				} catch (FileNotFoundException e) {
-					LOGGER.log(Level.WARNING,
-							"Could not save Text File Sample for testing", e);
-				}
-			}
-	
-			// ***07***
-			// intratile_relabel_1toN<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu,lab_mat_gpu_1N);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_07 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
-					Pointer.to(lab_mat_gpu_1N));
-			// Call the kernel function.
-			cuLaunchKernel(F_intratile_relabel_1toN, ntilesX, ntilesY, 1, // Grid
-																			// dimension
-																			// ::
-																			// grid(ntilesX,ntilesY,1);
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					sh_mem, null, // Shared memory size and stream
-					kern_07, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			// ***08***
-			// del_duplicated_lines<<<grid,block>>>(lab_mat_gpu_1N,WIDTH_e,HEIGHT_e,
-			// lab_mat_gpu_f,WIDTH,HEIGHT);
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu_1N),
-					Pointer.to(new int[] { WIDTH_e }),
-					Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu_f),
-					Pointer.to(new int[] { WIDTH }),
-					Pointer.to(new int[] { HEIGHT }));
-			// Call the kernel function.
-			cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
-																		// dimension
-																		// ::
-																		// grid(ntilesX,ntilesY,1);
-					tiledimX, tiledimY, 1, // Block dimension ::
-											// block(tiledimX,tiledimY,1);
-					0, null, // Shared memory size and stream
-					kern_08, null // Kernel- and extra parameters
-			);
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-			cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f, sizeUintL_s);
-	
-			/*
-			 * debugging
-			 */
-			if (UrbanGridCUDAProcess.TESTING) {
-				try {
-					UrbanGridCUDAProcess
-							.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
-									lab_mat_cpu_f, DataBuffer.TYPE_INT, "ssgci_lab");
-				} catch (IOException e) {
-					LOGGER.log(Level.WARNING,
-							"Could not save GeoTIFF Sample for testing", e);
-				}
-			}
-	
-			// ***09***
-			// histogram_shmem<unsigned int>
-			// <<<dimGrid,dimBlock,smemSize0>>>(lab_mat_gpu_f, dev_ROI, d_histogram,
-			// map_len, Nbins_0);
-			// histogram <unsigned int> <<<dimGrid,dimBlock>>> (lab_mat_gpu_f,
-			// dev_ROI, d_histogram, map_len, Nbins_0);
-			int h_histogram[] = new int[Nbins_0];
-			d_histogram = new CUdeviceptr();
-			cuMemAllocHost(Pointer.to(h_histogram), Nbins_0 * Sizeof.INT);
-			cuMemAlloc(d_histogram, Nbins_0 * Sizeof.INT);
-			cudaMemset(d_histogram, 0, Nbins_0 * Sizeof.INT);
-	
-			// code specific for ss-gci:
-			cuMemcpyDtoH(Pointer.to(urban_cpu), urban_gpu, sizeChar_o);
-			System.arraycopy(urban_cpu, WIDTH, TMP, 0, map_len);// copy urban(which
-																// is BINf now) to
-																// TMP skipping the
-																// first row of
-																// zeros.
-			cuMemcpyHtoD(d_BINf, Pointer.to(TMP), sizeChar);
-	
-			// start_t = clock();
-			// Set up the kernel parameters: A pointer to an array of pointers which
-			// point to the actual values.
-			Pointer kern_09 = Pointer.to(Pointer.to(lab_mat_gpu_f),
-					Pointer.to(d_BINf), Pointer.to(d_histogram),
-					Pointer.to(new int[] { map_len }),
-					Pointer.to(new int[] { Nbins_0 }));
-			int smemSize0 = (Nbins_0) * Sizeof.INT;
-			// Call the kernel function.
-			/*
-			 * if( smemSize0 < sharedMemPerBlock ){
-			 * cuLaunchKernel(F_histogram_shmem, Nblks_per_grid, 1, 1, // Grid
-			 * dimension :: dimGrid( Nblks_per_grid, 1, 1 ); threads_ccl, 1, 1, //
-			 * Block dimension :: dimBlock( threads_ccl, 1, 1 ); smemSize0, null, //
-			 * Shared memory size and stream kern_09, null // Kernel- and extra
-			 * parameters ); }else{
-			 */cuLaunchKernel(F_histogram, Nblks_per_grid, 1, 1, // Grid dimension
-																	// :: dimGrid(
-																	// Nblks_per_grid,
-																	// 1, 1 );
-					threads_ccl, 1, 1, // Block dimension :: dimBlock( threads_ccl,
-										// 1, 1 );
-					0, null, // Shared memory size and stream
-					kern_09, null // Kernel- and extra parameters
-			);
-			// }
-			cuCtxSynchronize();
-			// end_t = clock();
-			// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
-			// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
-			// elapsed_time += (int)( (double)(end_t - start_t ) /
-			// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-	
-			cuMemcpyDtoH(Pointer.to(h_histogram), d_histogram, Nbins_0 * Sizeof.INT);
-	
-			if (UrbanGridCUDAProcess.TESTING) {
-				try {
-					storePlainTextSampleFile(h_histogram, "ssgci_histogram");
-				} catch (FileNotFoundException e) {
-					LOGGER.log(Level.WARNING,
-							"Could not save Text File Sample for testing", e);
-				}
-			}
-			// System.out.println("\n CUDA Finished!!\n");
-			/*
-			 * long estimatedTime = System.currentTimeMillis() - startTime;
-			 * System.out.println("Elapsed time fragmentation()" + estimatedTime +
-			 * " [ms]");
-			 */
-			/*
-			 * h_histogram : histogram counts including the count of zeros
-			 * (background); Nbins_0 : number of bins, including the count of zeros
-			 * (background); lab_mat_cpu_f : map of same size as the one for current
-			 * admin unit and with labels of the map of current year.
-			 */
-			// return Arrays.asList(h_histogram, Nbins_0, lab_mat_cpu_f); // ––>
-			// lab_mat_cpu_f is useful for testing purpose, maybe not on MapStore!
-			Map<String, Object> resultMap = new HashMap<String, Object>();
+			CUdeviceptr urban_gpu 		= null;
+			CUdeviceptr d_BINf 			= null;
+			CUdeviceptr dev_ROI 		= null;
+			CUdeviceptr lab_mat_gpu 	= null;
+			CUdeviceptr lab_mat_gpu_1N 	= null;
+			CUdeviceptr lab_mat_gpu_f 	= null;
+			CUdeviceptr bins_gpu 		= null;
+			CUdeviceptr d_histogram 	= null;
 
-			resultMap.put("h_histogram", h_histogram);
-			resultMap.put("Nbins_0", Nbins_0);
-			resultMap.put("lab_mat_cpu_f", lab_mat_cpu_f);
 
-			return resultMap;
-		} finally {
+			//int gpuDeviceCount[] = { 0 };
+			int elapsed_time = 0;
+			// count the number of kernels that must print their output:
+			int count_print = 0;
+			// floor(sqrt(devProp.maxThreadsPerBlock));
+			int sqrt_nmax_threads = BLOCKDIM_X_ccl;
+
 			try{
-			
-				// FREE MEMORY:
-				// ...on the host:
-				// It seems that host mem cannot be freed!
-				// cudaFreeHost(lab_mat_cpu);
-				// ...on the device:
-				if (lab_mat_gpu_f != null) 	cuMemFree(lab_mat_gpu_f);
-				if (lab_mat_gpu != null) 	cuMemFree(lab_mat_gpu);
-				if (lab_mat_gpu_1N != null) cuMemFree(lab_mat_gpu_1N);
-				if (urban_gpu != null) 		cuMemFree(urban_gpu);
-				if (dev_ROI != null) 		cuMemFree(dev_ROI);
-				if (d_histogram != null) 	cuMemFree(d_histogram);
-		
-				// Unload MODULE
-				if (module != null) cuModuleUnload(module);
-		
-				// Destroy CUDA context:
-				if (context != null) cuCtxDestroy(context);
-			} catch (Exception e){
-				// LOG THE EXCEPTION
+				int deviceCount = getGPUDeviceCount();
+
+				/*
+				 * SELECT THE FIRST DEVICE (but I should select/split devices according
+				 * to streams)
+				 */
+				int selDev = getRandomGpuDevice(deviceCount);
+
+				System.out.println(" - GPU Device: ["+selDev+"] / ["+deviceCount+"]");
+
+				CUdevice device = new CUdevice();
+				cuDeviceGet(device, selDev);
+				// Query some useful properties:
+				int amountProperty[] = { 0 };
+				// -1-
+				cuDeviceGetAttribute(amountProperty,
+						CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
+				int maxThreadsPerBlock = amountProperty[0];
+				// -2-
+				cuDeviceGetAttribute(amountProperty,
+						CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
+				int MaxGridDimX = amountProperty[0];
+				// -3-
+				cuDeviceGetAttribute(amountProperty,
+						CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device);
+				int N_sm = amountProperty[0];
+				// -4-
+				cuDeviceGetAttribute(amountProperty,
+						CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, device);
+				int max_threads_per_SM = amountProperty[0];
+				// -5-
+				cuDeviceGetAttribute(amountProperty,
+						CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK, device);
+				int sharedMemPerBlock = amountProperty[0];
+
+				/*
+				 * CREATE THE CONTEXT (for currently selected device)
+				 */
+				context = new CUcontext();
+				// int cuCtxCreate_STATUS =
+				cuCtxCreate(context, selDev, device);
+				// Load the ptx file:
+				module = new CUmodule();
+				cuModuleLoad(module, PTXFILE_ccl_1toN_hist);// run grep -in entry
+				// ccl.ptx
+				/*
+				 * ENTRY POINTS (obtain function pointers to the entry kernels) -0-
+				 * _Z10filter_roiPhPKhj -1- _Z19intra_tile_labelingPKhjjjjPj -2-
+				 * _Z15stitching_tilesPjjjj -3- _Z16root_equivalencePjjjj -4-
+				 * _Z19intra_tile_re_labeljjPj -5- _Z12count_labelsjjPKjPj -6-
+				 * _Z14labels__1_to_NjjPKjPjS1_jjS1_S1_ -7-
+				 * _Z22intratile_relabel_1toNjjPKjPj -8-
+				 * _Z20del_duplicated_linesPKjjjPjjj -9- _Z15histogram_shmemPKjPKhPjjj
+				 * -9- _Z9histogramPKjPKhPjjj
+				 */
+				// -0-
+				CUfunction F_filter_roi = new CUfunction();
+				cuModuleGetFunction(F_filter_roi, module, "_Z10filter_roiPhPKhj");
+				// -1-
+				CUfunction F_intra_tile_labeling = new CUfunction();
+				cuModuleGetFunction(F_intra_tile_labeling, module,
+						"_Z19intra_tile_labelingPKhjjjjPj");
+				// -2-
+				CUfunction F_stitching_tiles = new CUfunction();
+				cuModuleGetFunction(F_stitching_tiles, module,
+						"_Z15stitching_tilesPjjjj");
+				// -3-
+				CUfunction F_root_equivalence = new CUfunction();
+				cuModuleGetFunction(F_root_equivalence, module,
+						"_Z16root_equivalencePjjjj");
+				// -4-
+				CUfunction F_intra_tile_re_label = new CUfunction();
+				cuModuleGetFunction(F_intra_tile_re_label, module,
+						"_Z19intra_tile_re_labeljjPj");
+				// -5-
+				CUfunction F_count_labels = new CUfunction();
+				cuModuleGetFunction(F_count_labels, module, "_Z12count_labelsjjPKjPj");
+				// -6-
+				CUfunction F_labels__1_to_N = new CUfunction();
+				cuModuleGetFunction(F_labels__1_to_N, module,
+						"_Z14labels__1_to_NjjPKjPjS1_jjS1_S1_");
+				// -7-
+				CUfunction F_intratile_relabel_1toN = new CUfunction();
+				cuModuleGetFunction(F_intratile_relabel_1toN, module,
+						"_Z22intratile_relabel_1toNjjPKjPj");
+				// -8-
+				CUfunction F_del_duplicated_lines = new CUfunction();
+				cuModuleGetFunction(F_del_duplicated_lines, module,
+						"_Z20del_duplicated_linesPKjjjPjjj");
+				// -9a-
+				CUfunction F_histogram_shmem = new CUfunction();
+				cuModuleGetFunction(F_histogram_shmem, module,
+						"_Z15histogram_shmemPKjPKhPjjj");
+				// -9b-
+				CUfunction F_histogram = new CUfunction();
+				cuModuleGetFunction(F_histogram, module, "_Z9histogramPKjPKhPjjj");
+
+				/*
+				 * ALLOCATION
+				 */
+				int WIDTH = beans.get(admin_unit).width;
+				int HEIGHT = beans.get(admin_unit).height;
+				int map_len = WIDTH * HEIGHT;
+				int tiledimX = sqrt_nmax_threads;
+				int tiledimY = sqrt_nmax_threads;
+				// I need to add a first row of zeros, to let the kernels work fine also
+				// at location (0,0),
+				// where the LABEL cannot be different from zero (the LABEL is equal to
+				// thread absolute position).
+				int HEIGHT_1 = HEIGHT + 1;
+				// X-dir of extended array
+				int ntilesX = (int) Math.ceil((double) (WIDTH - 1)
+						/ (double) (tiledimX - 1));
+				int ntX_less = (int) Math.floor((double) (WIDTH - 1)
+						/ (double) (tiledimX - 1));
+				int WIDTH_e = (ntilesX - ntX_less) + (ntX_less * tiledimX)
+						+ (WIDTH - 1 - ntX_less * (tiledimX - 1));
+				// Y-dir of extended array
+				int ntilesY = (int) Math.ceil((double) (HEIGHT_1 - 1)
+						/ (double) (tiledimY - 1));
+				int ntY_less = (int) Math.floor((double) (HEIGHT_1 - 1)
+						/ (double) (tiledimY - 1));
+				int HEIGHT_e = (ntilesY - ntY_less) + (ntY_less * tiledimY)
+						+ (HEIGHT_1 - 1 - ntY_less * (tiledimY - 1));
+				/* ....::: DIM of ARRAYS in BYTES :::.... */
+				long sizeChar = WIDTH * HEIGHT * Sizeof.BYTE; // it does not need the
+				// offset
+				long sizeChar_o = WIDTH * HEIGHT_1 * Sizeof.BYTE; // it accounts for the
+				// offset
+				// long sizeUintL = WIDTH * HEIGHT_1 * sizeof.byte;
+				long sizeUintL_s = WIDTH * HEIGHT * Sizeof.INT;
+				long sizeUintL_e = WIDTH_e * HEIGHT_e * Sizeof.INT; // the offset is
+				// considered (using
+				// HEIGHT_1 to
+				// define HEIGHT_e)
+				long sizeBins = ntilesX * ntilesY * Sizeof.INT;
+
+				/*
+				 * CPU ARRAYS
+				 */
+				int lab_mat_cpu[] = new int[WIDTH_e * HEIGHT_e];
+				int lab_mat_cpu_f[] = new int[WIDTH * HEIGHT];
+				int bins_cpu[] = new int[ntilesX * ntilesY];
+				int cumsum[] = new int[ntilesX * ntilesY];
+				byte TMP[] = new byte[WIDTH * HEIGHT];
+				byte urban_cpu[] = new byte[WIDTH * HEIGHT_1];
+				byte h_binroi_1[] = new byte[WIDTH * HEIGHT_1];
+				cuMemAllocHost(Pointer.to(lab_mat_cpu), sizeUintL_e);
+				cuMemAllocHost(Pointer.to(lab_mat_cpu_f), sizeUintL_s);
+				cuMemAllocHost(Pointer.to(bins_cpu), sizeBins);
+				cuMemAllocHost(Pointer.to(cumsum), sizeBins);
+				cuMemAllocHost(Pointer.to(TMP), sizeChar);
+				cuMemAllocHost(Pointer.to(urban_cpu), sizeChar_o);
+				cuMemAllocHost(Pointer.to(h_binroi_1), sizeChar_o);
+				// Arrays.fill( TMP, (byte) 0 );
+
+				/*
+				 * GPU ARRAYS use CUDA_CHECK_RETURN() for all calls.
+				 */
+				// get pointers
+				urban_gpu = new CUdeviceptr();
+				d_BINf = new CUdeviceptr();
+				dev_ROI = new CUdeviceptr();
+				lab_mat_gpu = new CUdeviceptr();
+				lab_mat_gpu_1N = new CUdeviceptr();
+				lab_mat_gpu_f = new CUdeviceptr();
+				bins_gpu = new CUdeviceptr();
+				// allocate in mem
+				cuMemAlloc(urban_gpu, sizeChar_o);
+				cuMemAlloc(d_BINf, sizeChar);
+				cuMemAlloc(dev_ROI, sizeChar_o);
+				cuMemAlloc(lab_mat_gpu, sizeUintL_e);
+				cuMemAlloc(lab_mat_gpu_1N, sizeUintL_e);
+				cuMemAlloc(lab_mat_gpu_f, sizeUintL_s);
+				cuMemAlloc(bins_gpu, sizeBins);
+				// set mem
+				cudaMemset(urban_gpu, 0, sizeChar_o);
+				cudaMemset(d_BINf, 0, sizeChar);
+				cudaMemset(dev_ROI, 0, sizeChar_o);
+				cudaMemset(bins_gpu, 0, sizeBins);
+				cudaMemset(lab_mat_gpu, 0, sizeUintL_e);
+				cudaMemset(lab_mat_gpu_1N, 0, sizeUintL_e);
+				cudaMemset(lab_mat_gpu_f, 0, sizeUintL_s);
+				/*
+				 * MEM COPY H2D
+				 */
+
+				Arrays.fill(h_binroi_1, (byte) 0);
+
+				if (year == 0) {
+					System.arraycopy(beans.get(admin_unit).getReferenceImage(), 0,
+							h_binroi_1, WIDTH, map_len);
+					cuMemcpyHtoD(urban_gpu, Pointer.to(h_binroi_1), sizeChar_o);
+				} else if (year == 1) {
+					System.arraycopy(beans.get(admin_unit).getCurrentImage(), 0,
+							h_binroi_1, WIDTH, map_len);
+					cuMemcpyHtoD(urban_gpu, Pointer.to(h_binroi_1), sizeChar_o);
+				} else if (year == 2) {
+					// do nothing because the DIFF is calculated in JAVA ==> make the
+					// JCuda/Cuda version to speedup computation!!
+
+					/*
+					 * System.out.println(
+					 * "You should implement in CUDA the difference between ref & curr!!"
+					 * ); for(int ii=0;ii<map_len;ii++){ host_PERI[ii] =
+					 * beans.get(admin_unit
+					 * ).referenceImage[ii]-beans.get(admin_unit).getCurrentImage()[ii];
+					 * } return host_PERI;
+					 */}
+				Arrays.fill(h_binroi_1, (byte) 0);
+				System.arraycopy(beans.get(admin_unit).roi, 0, h_binroi_1, WIDTH,
+						map_len);
+				cuMemcpyHtoD(dev_ROI, Pointer.to(h_binroi_1), sizeChar_o);
+
+				/*
+				 * KERNELS GEOMETRY NOTE: use ceil() instead of the "%" operator!!!
+				 */
+				int sh_mem = (tiledimX * tiledimY) * (Sizeof.INT);
+				char sh_mem_f = (threads_ccl) * (Sizeof.BYTE);
+
+				int num_blocks_per_SM = max_threads_per_SM / threads_ccl;// e.g.
+				// 1536/512
+				// = 3
+				int Nblks_per_grid = N_sm * num_blocks_per_SM;
+				int mapel_per_thread = (int) Math.ceil((double) map_len
+						/ (double) ((threads_ccl * 2) * Nblks_per_grid));// e.g. n /
+				// (14*3*512*2)
+
+				/*
+				 * KERNELS INVOCATION
+				 */
+				// ***00***
+				// filter_roi<<<dimGrid,dimBlock>>>(urban_gpu,dev_ROI,map_len);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_00 = Pointer
+						.to(Pointer.to(urban_gpu), Pointer.to(dev_ROI),
+								Pointer.to(new int[] { WIDTH * HEIGHT_1 }));
+				// Call the kernel function.
+				cuLaunchKernel(F_filter_roi, Nblks_per_grid, 1, 1, // Grid dimension ::
+						// dimGrid(
+						// Nblks_per_grid,
+						// 1, 1 )
+						threads_ccl, 1, 1, // Block dimension :: dimBlock( threads_ccl,
+						// 1, 1 )
+						0, null, // Shared memory size and stream
+						kern_00, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				// ***01***
+				// intra_tile_labeling<<<grid,block,sh_mem>>>(urban_gpu,WIDTH,HEIGHT_1,WIDTH_e,HEIGHT_e,lab_mat_gpu);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_01 = Pointer.to(Pointer.to(urban_gpu),
+						Pointer.to(new int[] { WIDTH }),
+						Pointer.to(new int[] { HEIGHT_1 }),
+						Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu));
+				// Call the kernel function.
+				cuLaunchKernel(F_intra_tile_labeling, ntilesX, ntilesY, 1, // Grid
+						// dimension
+						// ::
+						// grid(ntilesX,ntilesY,1)
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						sh_mem, null, // Shared memory size and stream
+						kern_01, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+				if (UrbanGridCUDAProcess.TESTING) {
+					try {
+						Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
+								Pointer.to(new int[] { WIDTH_e }),
+								Pointer.to(new int[] { HEIGHT_e }),
+								Pointer.to(lab_mat_gpu_f),
+								Pointer.to(new int[] { WIDTH }),
+								Pointer.to(new int[] { HEIGHT }));
+						// Call the kernel function.
+						cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
+								// dimension
+								// ::
+								// grid(ntilesX,ntilesY,1);
+								tiledimX, tiledimY, 1, // Block dimension ::
+								// block(tiledimX,tiledimY,1);
+								0, null, // Shared memory size and stream
+								kern_08, null // Kernel- and extra parameters
+								);
+						cuCtxSynchronize();
+						// end_t = clock();
+						// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+						// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000
+						// ));
+						// elapsed_time += (int)( (double)(end_t - start_t ) /
+						// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+						cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f,
+								sizeUintL_s);
+
+						UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH,
+								HEIGHT, lab_mat_cpu_f, DataBuffer.TYPE_INT,
+								"ssgci__intra_tile_labeling");
+
+					} catch (IOException e) {
+						LOGGER.log(Level.WARNING,
+								"Could not save GeoTIFF Sample for testing", e);
+					}
+				}
+
+				// ***02***
+				// stitching_tiles<<<grid,block_2>>>(lab_mat_gpu,tiledimY, WIDTH_e,
+				// HEIGHT_e);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_02 = Pointer.to(Pointer.to(lab_mat_gpu),
+						Pointer.to(new int[] { tiledimY }),
+						Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }));
+				// Call the kernel function.
+				cuLaunchKernel(F_stitching_tiles, ntilesX, ntilesY, 1, // Grid dimension
+						// ::
+						// grid(ntilesX,ntilesY,1)
+						tiledimX, 1, 1, // Block dimension :: block_2(tiledimX,1,1); //
+						// ==> this is only possible if the block is
+						// squared !!!!!!!! Because I use the same
+						// threads for cols & rows
+						0, null, // Shared memory size and stream
+						kern_02, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				// ***03***
+				// root_equivalence<<<grid_2,block_2>>>(lab_mat_gpu,tiledimY, WIDTH_e,
+				// HEIGHT_e);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_03 = Pointer.to(Pointer.to(lab_mat_gpu),
+						Pointer.to(new int[] { tiledimY }),
+						Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }));
+				// Call the kernel function.
+				cuLaunchKernel(F_root_equivalence, ntilesX, ntilesY, 1, // Grid
+						// dimension ::
+						// grid_2(ntilesX,ntilesY,1);
+						tiledimX, 1, 1, // Block dimension :: block_2(tiledimX,1,1); //
+						// ==> this is only possible if the block is
+						// squared !!!!!!!! Because I use the same
+						// threads for cols & rows
+						0, null, // Shared memory size and stream
+						kern_03, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				// ***04***
+				// intra_tile_re_label<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_04 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu));
+				// Call the kernel function.
+				cuLaunchKernel(F_intra_tile_re_label, ntilesX, ntilesY, 1, // Grid
+						// dimension
+						// ::
+						// grid(ntilesX,ntilesY,1);
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						sh_mem, null, // Shared memory size and stream
+						kern_04, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+				if (UrbanGridCUDAProcess.TESTING) {
+					try {
+						Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
+								Pointer.to(new int[] { WIDTH_e }),
+								Pointer.to(new int[] { HEIGHT_e }),
+								Pointer.to(lab_mat_gpu_f),
+								Pointer.to(new int[] { WIDTH }),
+								Pointer.to(new int[] { HEIGHT }));
+						// Call the kernel function.
+						cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
+								// dimension
+								// ::
+								// grid(ntilesX,ntilesY,1);
+								tiledimX, tiledimY, 1, // Block dimension ::
+								// block(tiledimX,tiledimY,1);
+								0, null, // Shared memory size and stream
+								kern_08, null // Kernel- and extra parameters
+								);
+						cuCtxSynchronize();
+						// end_t = clock();
+						// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+						// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000
+						// ));
+						// elapsed_time += (int)( (double)(end_t - start_t ) /
+						// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+						cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f,
+								sizeUintL_s);
+						UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH,
+								HEIGHT, lab_mat_cpu_f, DataBuffer.TYPE_INT,
+								"ssgci__Lrand");
+
+					} catch (IOException e) {
+						LOGGER.log(Level.WARNING,
+								"Could not save GeoTIFF Sample for testing", e);
+					}
+				}
+
+				// ***05***
+				// count_labels<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu,bins_gpu);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_05 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
+						Pointer.to(bins_gpu));
+				// Call the kernel function.
+				cuLaunchKernel(F_count_labels, ntilesX, ntilesY, 1, // Grid dimension ::
+						// grid(ntilesX,ntilesY,1);
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						sh_mem, null, // Shared memory size and stream
+						kern_05, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+				cuMemcpyDtoH(Pointer.to(bins_cpu), bins_gpu, sizeBins);
+				cumsum[0] = 0;
+				int Nbins = bins_cpu[0];
+				for (int ii = 1; ii < ntilesX * ntilesY; ii++) {
+					cumsum[ii] = Nbins;
+					Nbins += bins_cpu[ii];
+				}
+				int Nbins_0 = Nbins + 1;// I count also the ZERO!
+
+				// ***06***
+				// labels__1_to_N<<<grid,block,sh_mem>>>( WIDTH_e, HEIGHT_e,
+				// lab_mat_gpu, lab_mat_gpu_1N, bins_gpu, Nbins, bdx_e, ID_rand_gpu,
+				// ID_1toN_gpu );
+				CUdeviceptr ID_rand_gpu = new CUdeviceptr();
+				CUdeviceptr ID_1toN_gpu = new CUdeviceptr();
+				if (Nbins <= 0) {
+					System.out.println("WARNING: NBins == " + Nbins);
+				}
+				cuMemAlloc(ID_rand_gpu, Nbins * Sizeof.INT);
+				cuMemAlloc(ID_1toN_gpu, Nbins * Sizeof.INT);
+				cuMemcpyHtoD(bins_gpu, Pointer.to(cumsum), sizeBins);
+				int bdx_e = WIDTH_e - (ntilesX - 1) * tiledimX;
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_06 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
+						Pointer.to(lab_mat_gpu_1N), Pointer.to(bins_gpu),
+						Pointer.to(new int[] { Nbins }),
+						Pointer.to(new int[] { bdx_e }), Pointer.to(ID_rand_gpu),
+						Pointer.to(ID_1toN_gpu));
+				// Call the kernel function.
+				cuLaunchKernel(F_labels__1_to_N, ntilesX, ntilesY, 1, // Grid dimension
+						// ::
+						// grid(ntilesX,ntilesY,1);
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						sh_mem, null, // Shared memory size and stream
+						kern_06, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				if (UrbanGridCUDAProcess.TESTING) {
+					try {
+						int ID_rand_cpu[] = new int[Nbins];
+						int ID_1toN_cpu[] = new int[Nbins];
+						cuMemAllocHost(Pointer.to(ID_rand_cpu), Nbins * Sizeof.INT);
+						cuMemAllocHost(Pointer.to(ID_1toN_cpu), Nbins * Sizeof.INT);
+						cuMemcpyDtoH(Pointer.to(ID_rand_cpu), ID_rand_gpu, Nbins
+								* Sizeof.INT);
+						cuMemcpyDtoH(Pointer.to(ID_1toN_cpu), ID_1toN_gpu, Nbins
+								* Sizeof.INT);
+						storePlainTextSampleFile(ID_rand_cpu, "ssgci_ID_rand_cpu");
+						storePlainTextSampleFile(ID_1toN_cpu, "ssgci_ID_1toN_cpu");
+					} catch (FileNotFoundException e) {
+						LOGGER.log(Level.WARNING,
+								"Could not save Text File Sample for testing", e);
+					}
+				}
+
+				// ***07***
+				// intratile_relabel_1toN<<<grid,block,sh_mem>>>(WIDTH_e,HEIGHT_e,lab_mat_gpu,lab_mat_gpu_1N);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_07 = Pointer.to(Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu),
+						Pointer.to(lab_mat_gpu_1N));
+				// Call the kernel function.
+				cuLaunchKernel(F_intratile_relabel_1toN, ntilesX, ntilesY, 1, // Grid
+						// dimension
+						// ::
+						// grid(ntilesX,ntilesY,1);
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						sh_mem, null, // Shared memory size and stream
+						kern_07, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				// ***08***
+				// del_duplicated_lines<<<grid,block>>>(lab_mat_gpu_1N,WIDTH_e,HEIGHT_e,
+				// lab_mat_gpu_f,WIDTH,HEIGHT);
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu_1N),
+						Pointer.to(new int[] { WIDTH_e }),
+						Pointer.to(new int[] { HEIGHT_e }), Pointer.to(lab_mat_gpu_f),
+						Pointer.to(new int[] { WIDTH }),
+						Pointer.to(new int[] { HEIGHT }));
+				// Call the kernel function.
+				cuLaunchKernel(F_del_duplicated_lines, ntilesX, ntilesY, 1, // Grid
+						// dimension
+						// ::
+						// grid(ntilesX,ntilesY,1);
+						tiledimX, tiledimY, 1, // Block dimension ::
+						// block(tiledimX,tiledimY,1);
+						0, null, // Shared memory size and stream
+						kern_08, null // Kernel- and extra parameters
+						);
+				cuCtxSynchronize();
+				// end_t = clock();
+				// System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				// (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				// elapsed_time += (int)( (double)(end_t - start_t ) /
+				// (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+				cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f, sizeUintL_s);
+
+				/*
+				 * debugging
+				 */
+				if (UrbanGridCUDAProcess.TESTING) {
+					try {
+						UrbanGridCUDAProcess
+						.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
+								lab_mat_cpu_f, DataBuffer.TYPE_INT, "ssgci_lab");
+					} catch (IOException e) {
+						LOGGER.log(Level.WARNING,
+								"Could not save GeoTIFF Sample for testing", e);
+					}
+				}
+
+				// ***09***
+				// histogram_shmem<unsigned int>
+				// <<<dimGrid,dimBlock,smemSize0>>>(lab_mat_gpu_f, dev_ROI, d_histogram,
+				// map_len, Nbins_0);
+				// histogram <unsigned int> <<<dimGrid,dimBlock>>> (lab_mat_gpu_f,
+				// dev_ROI, d_histogram, map_len, Nbins_0);
+				int h_histogram[] = new int[Nbins_0];
+				d_histogram = new CUdeviceptr();
+				cuMemAllocHost(Pointer.to(h_histogram), Nbins_0 * Sizeof.INT);
+				cuMemAlloc(d_histogram, Nbins_0 * Sizeof.INT);
+				cudaMemset(d_histogram, 0, Nbins_0 * Sizeof.INT);
+
+				// code specific for ss-gci:
+				cuMemcpyDtoH(Pointer.to(urban_cpu), urban_gpu, sizeChar_o);
+				System.arraycopy(urban_cpu, WIDTH, TMP, 0, map_len);// copy urban(which
+				// is BINf now) to
+				// TMP skipping the
+				// first row of
+				// zeros.
+				cuMemcpyHtoD(d_BINf, Pointer.to(TMP), sizeChar);
+
+				// start_t = clock();
+				// Set up the kernel parameters: A pointer to an array of pointers which
+				// point to the actual values.
+				Pointer kern_09 = Pointer.to(Pointer.to(lab_mat_gpu_f),
+						Pointer.to(d_BINf), Pointer.to(d_histogram),
+						Pointer.to(new int[] { map_len }),
+						Pointer.to(new int[] { Nbins_0 }));
+				int smemSize0 = (Nbins_0) * Sizeof.INT;
+				// Call the kernel function.
+				/*
+				 * if( smemSize0 < sharedMemPerBlock ){
+				 * cuLaunchKernel(F_histogram_shmem, Nblks_per_grid, 1, 1, // Grid
+				 * dimension :: dimGrid( Nblks_per_grid, 1, 1 ); threads_ccl, 1, 1, //
+				 * Block dimension :: dimBlock( threads_ccl, 1, 1 ); smemSize0, null, //
+				 * Shared memory size and stream kern_09, null // Kernel- and extra
+				 * parameters ); }else{
+				 */cuLaunchKernel(F_histogram, Nblks_per_grid, 1, 1, // Grid dimension
+						 // :: dimGrid(
+						 // Nblks_per_grid,
+						 // 1, 1 );
+						 threads_ccl, 1, 1, // Block dimension :: dimBlock( threads_ccl,
+						 // 1, 1 );
+						 0, null, // Shared memory size and stream
+						 kern_09, null // Kernel- and extra parameters
+						 );
+				 // }
+				 cuCtxSynchronize();
+				 // end_t = clock();
+				 // System.out.println("  -%d- %20s\t%6d [msec]\n",++count_print,kern_compl_,(int)(
+				 // (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
+				 // elapsed_time += (int)( (double)(end_t - start_t ) /
+				 // (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
+
+				 cuMemcpyDtoH(Pointer.to(h_histogram), d_histogram, Nbins_0 * Sizeof.INT);
+
+				 if (UrbanGridCUDAProcess.TESTING) {
+					 try {
+						 storePlainTextSampleFile(h_histogram, "ssgci_histogram");
+					 } catch (FileNotFoundException e) {
+						 LOGGER.log(Level.WARNING,
+								 "Could not save Text File Sample for testing", e);
+					 }
+				 }
+				 // System.out.println("\n CUDA Finished!!\n");
+				 /*
+				  * long estimatedTime = System.currentTimeMillis() - startTime;
+				  * System.out.println("Elapsed time fragmentation()" + estimatedTime +
+				  * " [ms]");
+				  */
+				 /*
+				  * h_histogram : histogram counts including the count of zeros
+				  * (background); Nbins_0 : number of bins, including the count of zeros
+				  * (background); lab_mat_cpu_f : map of same size as the one for current
+				  * admin unit and with labels of the map of current year.
+				  */
+				 // return Arrays.asList(h_histogram, Nbins_0, lab_mat_cpu_f); // ––>
+				 // lab_mat_cpu_f is useful for testing purpose, maybe not on MapStore!
+				 Map<String, Object> resultMap = new HashMap<String, Object>();
+
+				 resultMap.put("h_histogram", h_histogram);
+				 resultMap.put("Nbins_0", Nbins_0);
+				 resultMap.put("lab_mat_cpu_f", lab_mat_cpu_f);
+
+				 return resultMap;
+			} finally {
+				try{
+
+					// FREE MEMORY:
+					// ...on the host:
+					// It seems that host mem cannot be freed!
+					// cudaFreeHost(lab_mat_cpu);
+					// ...on the device:
+					if (lab_mat_gpu_f != null) 	cuMemFree(lab_mat_gpu_f);
+					if (lab_mat_gpu != null) 	cuMemFree(lab_mat_gpu);
+					if (lab_mat_gpu_1N != null) cuMemFree(lab_mat_gpu_1N);
+					if (urban_gpu != null) 		cuMemFree(urban_gpu);
+					if (dev_ROI != null) 		cuMemFree(dev_ROI);
+					if (d_histogram != null) 	cuMemFree(d_histogram);
+
+					// Unload MODULE
+					if (module != null) cuModuleUnload(module);
+
+					// Destroy CUDA context:
+					if (context != null) cuCtxDestroy(context);
+				} catch (Exception e){
+					// LOG THE EXCEPTION
+				}
 			}
 		}
+	}
 
+	/**
+	 * @param gpuDeviceCount
+	 * @return 
+	 * @throws ProcessException
+	 */
+	protected static int getGPUDeviceCount()
+			throws ProcessException {
+		int gpuDeviceCount[] = { 0 };
+		/*
+		 * ESTABILISH CONTEXT
+		 */
+		JCudaDriver.setExceptionsEnabled(true);
+		// Initialise the driver:
+		//err = 
+		cuInit(0);
+
+		/*
+		 * RECOGNIZE DEVICE(s) EXISTENCE:
+		 */
+		/*
+		 * if (err == CUDA_SUCCESS)
+		 * CUDA_CHECK_RETURN(cuDeviceGetCount(gpuDeviceCount)); if (deviceCount
+		 * == 0) { System.out.println("Error: no devices supporting CUDA\n");
+		 * exit(-1); }
+		 */
+		// Obtain the number of devices
+		cuDeviceGetCount(gpuDeviceCount);
+		int deviceCount = gpuDeviceCount[0];
+		if (deviceCount == 0) {
+			throw new ProcessException("Error: no devices supporting CUDA.");
+		}
+		
+		return deviceCount;
 	}
 
 	private static void storeIndex_double(double INDEX, String name)
@@ -1510,7 +1510,7 @@ public class CUDAClass {
 		CUdeviceptr dev_TMP = null;
 		CUdeviceptr d_Perimeter = null;
 
-		int gpuDeviceCount[] = { 0 };
+		//int gpuDeviceCount[] = { 0 };
 		int elapsed_time = 0;
 		// count the number of kernels that must print their output:
 		int count_print = 0;
@@ -1518,35 +1518,13 @@ public class CUDAClass {
 		// rural = true; System.out.println("delete 'rural = true' from code.");
 
 		try{
-			/*
-			 * ESTABILISH CONTEXT
-			 */
-			JCudaDriver.setExceptionsEnabled(true);
-			// Initialise the driver:
-			// err =
-			cuInit(0);
-	
-			/*
-			 * RECOGNIZE DEVICE(s) EXISTENCE:
-			 */
-			/*
-			 * if (err == CUDA_SUCCESS)
-			 * CUDA_CHECK_RETURN(cuDeviceGetCount(gpuDeviceCount)); if (deviceCount
-			 * == 0) { System.out.println("Error: no devices supporting CUDA\n");
-			 * exit(-1); }
-			 */
-			// Obtain the number of devices
-			cuDeviceGetCount(gpuDeviceCount);
-			int deviceCount = gpuDeviceCount[0];
-			if (deviceCount == 0) {
-				throw new ProcessException("Error: no devices supporting CUDA.");
-			}
+			int deviceCount = getGPUDeviceCount();
 	
 			/*
 			 * SELECT THE FIRST DEVICE (but I should select/split devices according
 			 * to streams)
 			 */
-			int selDev = UrbanGridCUDAProcess.gpuDevice;
+			int selDev = getRandomGpuDevice(deviceCount);
 			CUdevice device = new CUdevice();
 			cuDeviceGet(device, selDev);
 			// Query some useful properties:
@@ -1976,7 +1954,7 @@ public class CUDAClass {
 		
 		int mask_len = RADIUS * 2 + 1;
 		double std_4_area = mask_len * mask_len; // (RADIUS*RADIUS*areaOfOnePixel);
-		int gpuDeviceCount[] = { 0 };
+		//int gpuDeviceCount[] = { 0 };
 		int elapsed_time = 0;
 		// count the number of kernels that must print their output:
 		int count_print = 0;
@@ -1984,35 +1962,13 @@ public class CUDAClass {
 		// rural = true; System.out.println("delete 'rural = true' from code.");
 
 		try{
-			/*
-			 * ESTABILISH CONTEXT
-			 */
-			JCudaDriver.setExceptionsEnabled(true);
-			// Initialise the driver:
-			// err =
-			cuInit(0);
-	
-			/*
-			 * RECOGNIZE DEVICE(s) EXISTENCE:
-			 */
-			/*
-			 * if (err == CUDA_SUCCESS)
-			 * CUDA_CHECK_RETURN(cuDeviceGetCount(gpuDeviceCount)); if (deviceCount
-			 * == 0) { System.out.println("Error: no devices supporting CUDA\n");
-			 * exit(-1); }
-			 */
-			// Obtain the number of devices
-			cuDeviceGetCount(gpuDeviceCount);
-			int deviceCount = gpuDeviceCount[0];
-			if (deviceCount == 0) {
-				throw new ProcessException("Error: no devices supporting CUDA.");
-			}
+			int deviceCount = getGPUDeviceCount();
 	
 			/*
 			 * SELECT THE FIRST DEVICE (but I should select/split devices according
 			 * to streams)
 			 */
-			int selDev = UrbanGridCUDAProcess.gpuDevice;
+			int selDev = getRandomGpuDevice(deviceCount);
 			CUdevice device = new CUdevice();
 			cuDeviceGet(device, selDev);
 			// Query some useful properties:
@@ -2554,35 +2510,19 @@ public class CUDAClass {
 		CUdeviceptr dev_LTAKE_map 	= null;
 		CUdeviceptr dev_LTAKE_count = null;
 
-		int gpuDeviceCount[] = { 0 };
+		//int gpuDeviceCount[] = { 0 };
 		int elapsed_time = 0;
 		int gpuDev = 0;
 		// count the number of kernels that must print their output:
 		int count_print = 0;
 
 		try{
-			/*
-			 * ESTABILISH CONTEXT
-			 */
-			JCudaDriver.setExceptionsEnabled(true);
-			// Initialise the driver:
-			// CUresult err =
-			cuInit(0);
-	
-			/*
-			 * RECOGNIZE DEVICE(s) EXISTENCE:
-			 */
-			// Obtain the number of devices
-			cuDeviceGetCount(gpuDeviceCount);
-			int deviceCount = gpuDeviceCount[0];
-			if (deviceCount == 0) {
-				throw new ProcessException("Error: no devices supporting CUDA.");
-			}
+			int deviceCount = getGPUDeviceCount();
 			/*
 			 * SELECT THE FIRST DEVICE (but I should select/split devices according
 			 * to streams)
 			 */
-			int selDev = UrbanGridCUDAProcess.gpuDevice;
+			int selDev = getRandomGpuDevice(deviceCount);
 			CUdevice device = new CUdevice();
 			cuDeviceGet(device, selDev);
 			/*
@@ -2942,8 +2882,18 @@ public class CUDAClass {
         
         // –Fragmentation–
 		i = 1;// I run fragmentation on fictitious current which is at current layer position!
-		result = CUDAClass.fragmentation( beans, rural, ray_pixels, i, j );
+		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+		if (isFeasible)
+			result = CUDAClass.fragmentation( beans, rural, ray_pixels, i, j );
+		else
+			result = new double[]{Double.NaN};
 		return result;
 	}
 
+	public static int getRandomGpuDevice(int deviceCount) {
+		Random rn = new Random();
+		
+		return rn.nextInt(deviceCount);
+	}
+	
 }// close :: public class CUDAClass

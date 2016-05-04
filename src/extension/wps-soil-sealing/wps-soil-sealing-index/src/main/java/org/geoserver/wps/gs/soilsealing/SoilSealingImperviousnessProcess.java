@@ -126,7 +126,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
             @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
             @DescribeParameter(name = "pixelSize", min = 0, description = "Pixel Size") double pixelSize,
-            @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
+            @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda,
+            @DescribeParameter(name = "jobUid", description = "Name of the user running the Job") String jobUid)
             throws IOException {
     	
     	int gCount=0;
@@ -344,6 +345,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
             attributes.add(new FeatureAttribute("wsName", wsName));
             attributes.add(new FeatureAttribute("soilIndex", ""));
+            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
+            attributes.add(new FeatureAttribute("jobUid", jobUid));
 
             features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()), ciReference.getCRS(), typeName, attributes, null);
 
@@ -521,6 +524,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
     /**
      * 
      * @param index
+     * @param jcuda 
      * @return
      */
     private String getSealingIndex(int index) {

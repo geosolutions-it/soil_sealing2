@@ -78,7 +78,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     public static final Logger LOGGER = Logger.getLogger(UrbanGridProcess.class.toString());
 
     /** Select Current Cuda Device */
-    public static final int gpuDevice = 1;
+    //public static final int gpuDevice = 0;
     
     /** Default Pixel Area */
     private static final double PIXEL_AREA = 400;
@@ -461,6 +461,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         //if (n_years == 2) {
         //	some cuda code
     	//}
+        CUDAClass cuda = new CUDAClass();
         	switch( index ){
 
         		// ------- CORINE LAND COVER -------
@@ -487,8 +488,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
                     	// number of grids per admin_unit to give in output:
                     	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
+                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
                     		result[j][i] = new double[1];
-                    		result[j][i][0] = CUDAClass.urban_sprawl( beans, areaPix, i, j, Distribution );
+                    		if (isFeasible) {
+                    			result[j][i][0] = cuda.urban_sprawl( beans, areaPix, i, j, Distribution );
+                    		}
+                    		else
+                    			result[j][i][0] = Double.NaN;
                         }
                     	/*if (n_years>1) {
                     		result[j][n_years][0] = result[j][1][0]-result[j][0][0];
@@ -501,8 +507,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
                     	// number of grids per admin_unit to give in output:
                     	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
+                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
                     		result[j][i] = new double[1];
-                    		result[j][i][0]  = CUDAClass.edge_density( beans, areaPix, i, j );
+                    		if (isFeasible)
+                    			result[j][i][0] = CUDAClass.edge_density( beans, areaPix, i, j );
+                    		else
+                    			result[j][i][0] = Double.NaN;
                         }
                     }
                 	return result;
@@ -512,13 +522,19 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
                     	// number of grids per admin_unit to give in output:
                     	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
+                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
                     		result[j][i] = new double[1];
-                    		if(subId.equalsIgnoreCase("a")){ 		// urban_area [reduction]* --> a modification from original occurred!
-                    			result[j][i][0] = CUDAClass.urban_area( beans, areaPix, i, j );
-                    		}else if(subId.equalsIgnoreCase("b")){	// area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
-                    			result[j][i][0] = CUDAClass.highest_polygon_ratio(beans, areaPix, i, j);
-                    		}else if(subId.equalsIgnoreCase("c")){	// average area of other polygons [ccl+hist]
-                    			result[j][i][0] = CUDAClass.others_polygons_avesurf(beans, areaPix, i, j);
+                    		if (isFeasible)
+                    		{
+	                    		if(subId.equalsIgnoreCase("a")){ 		// urban_area [reduction]* --> a modification from original occurred!
+	                    			result[j][i][0] = cuda.urban_area( beans, areaPix, i, j );
+	                    		}else if(subId.equalsIgnoreCase("b")){	// area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
+	                    			result[j][i][0] = cuda.highest_polygon_ratio(beans, areaPix, i, j);
+	                    		}else if(subId.equalsIgnoreCase("c")){	// average area of other polygons [ccl+hist]
+	                    			result[j][i][0] = cuda.others_polygons_avesurf(beans, areaPix, i, j);
+	                    		}
+                    		} else {
+                    			result[j][i] = new double[]{Double.NaN};
                     		}
                     	}
                     }
@@ -532,15 +548,24 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
                     	// number of grids per admin_unit to give in output:
                     	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		result[j][i] = CUDAClass.fragmentation( beans, rural, ray_pixels, i, j );
+                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    		if (isFeasible)
+                    			result[j][i] = CUDAClass.fragmentation( beans, rural, ray_pixels, i, j );
+                    		else
+                    			result[j][i] = new double[]{Double.NaN};
                         }
                     	if (n_years>1) {
                     		// TODO: result[j][n_years] = CUDAClass.mapDifference(beans, result[j][0], result[j][1]);
-                    		result[j][n_years] = new double[result[j][0].length];
-                    		for(int ii=0;ii<result[j][0].length;ii++)
-                    		{
-                        		result[j][n_years][ii] = result[j][1][ii]-result[j][0][ii];
-                        	}
+                    		if(result[j][0][0] == Double.NaN || result[j][1][0] == Double.NaN) {
+                    			result[j][n_years] = new double[]{Double.NaN};
+                    		}
+                    		else {
+	                    		result[j][n_years] = new double[result[j][0].length];
+	                    		for(int ii=0;ii<result[j][0].length;ii++)
+	                    		{
+	                        		result[j][n_years][ii] = result[j][1][ii]-result[j][0][ii];
+	                        	}
+                    		}
                     	}
         			}
                     return result;
@@ -568,9 +593,19 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
                     	// number of grids per admin_unit to give in output:
                     	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		
+                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
                     		result[j][i] = new double[3];
-                    		result[j][i] = CUDAClass.modelUrbanDevelopment(beans, areaPix, i, j); 		// [X,Y1,Y2]
+                    		if (isFeasible) {
+                    			result[j][i] = cuda.modelUrbanDevelopment(beans, areaPix, i, j); 		// [X,Y1,Y2]
+                    			for (int k = 0; k < result[j][i].length; k++) {
+                    				if(Double.isInfinite(result[j][i][k]) 
+                    						|| Double.isNaN(result[j][i][k])) {
+                    					result[j][i][k] = 0.0;
+                    				}
+                    			}
+                    		}
+                    		else
+                    			result[j][i] = new double[]{0.0, 0.0, 0.0};
                     	}
                     }
         			return result;
@@ -584,7 +619,11 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                         
                         // I have to wrap any following class in a dedicated class for new urbanization process
                         // in order to calculate the required specific inputs!!
-                        result[j][i] = CUDAClass.newUrbanization( beans, rural, ray_pixels, i, j );                		
+                		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                		if(isFeasible)
+                			result[j][i] = CUDAClass.newUrbanization( beans, rural, ray_pixels, i, j );
+                		else
+                			result[j][i] = new double[]{Double.NaN};
                 	}
                     return result;
         	}

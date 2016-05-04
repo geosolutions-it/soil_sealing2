@@ -201,7 +201,8 @@ public class ChangeMatrixProcess implements GSProcess {
             @DescribeParameter(name = "nowFilter", description = "Filter to use on the raster data", min = 1) Filter nowFilter,
             @DescribeParameter(name = "classes", collectionType = Integer.class, min = 1, description = "The domain of the classes used in input rasters") Set<Integer> classes,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
-            @DescribeParameter(name = "JCUDA", min = 0, description = "Calculation of the ChangeMatrix by using JCUDA") Boolean jCudaEnabled)
+            @DescribeParameter(name = "JCUDA", min = 0, description = "Calculation of the ChangeMatrix by using JCUDA") Boolean jCudaEnabled,
+            @DescribeParameter(name = "jobUid", description = "Name of the user running the Job") String jobUid)
             throws IOException {
 
         // DEBUG OPTION
@@ -392,6 +393,8 @@ public class ChangeMatrixProcess implements GSProcess {
             attributes.add(new FeatureAttribute("wsName", wsName));
             attributes.add(new FeatureAttribute("layerName", ""));
             attributes.add(new FeatureAttribute("changeMatrix", ""));
+            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
+            attributes.add(new FeatureAttribute("jobUid", jobUid));
 
             features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()),
                     ciReference.getCRS(), typeName, attributes, null);

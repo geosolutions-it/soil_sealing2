@@ -131,7 +131,8 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
-            @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda)
+            @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda,
+            @DescribeParameter(name = "jobUid", description = "Name of the user running the Job") String jobUid)
             throws IOException {
 
         // ///////////////////////////////////////////////
@@ -352,6 +353,8 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
             attributes.add(new FeatureAttribute("wsName", wsName));
             attributes.add(new FeatureAttribute("soilIndex", ""));
+            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
+            attributes.add(new FeatureAttribute("jobUid", jobUid));
 
             features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()), ciReference.getCRS(), typeName, attributes, null);
 

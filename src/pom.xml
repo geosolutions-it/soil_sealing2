@@ -52,32 +52,27 @@
 
  <repositories>
   <repository>
-   <id>geosolutions</id>
-   <name>GeoSolutions Maven Repository</name>
-   <url>http://maven.geo-solutions.it/</url>
+   <id>boundless</id>
+   <name>Boundless Maven Repository</name>
+   <url>https://repo.boundlessgeo.com/main/</url>
+   <!-- contains snapshot and release (including third-party-dependences)               -->
+   <!-- Restlet maven Repository (http://maven.restlet.org)                             -->
+   <!-- ucar (https://artifacts.unidata.ucar.edu/content/repositories/unidata-releases) -->
    <snapshots>
      <enabled>true</enabled>
    </snapshots>
-  </repository>  
-
-  <repository>
-   <id>opengeo</id>
-   <name>OpenGeo Maven Repository</name>
-   <url>http://repo.opengeo.org/</url>
-   <snapshots>
+   <releases>
      <enabled>true</enabled>
-   </snapshots>
+   </releases>
   </repository>
   
   <repository>
     <id>osgeo</id>
     <name>Open Source Geospatial Foundation Repository</name>
     <url>http://download.osgeo.org/webdav/geotools/</url>
-    <snapshots>
-      <enabled>true</enabled>
-    </snapshots>
+    <!-- release repository used by geotools (and third-party dependencies) -->
   </repository>
-
+   
   <repository>
     <id>maven-restlet</id>
     <name>Restlet Maven Repository</name>
@@ -86,6 +81,27 @@
       <enabled>false</enabled>
     </snapshots>
   </repository>
+
+  <repository>
+    <id>hibspat</id>
+    <name>Hibernate Spatial</name>
+    <url>http://www.hibernatespatial.org/repository</url>
+    <snapshots>
+      <enabled>true</enabled>
+    </snapshots>
+   </repository>
+
+   <repository>
+      <id>geosolutions</id>
+      <name>geosolutions repository</name>
+      <url>http://maven.geo-solutions.it/</url>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+     <releases>
+       <enabled>true</enabled>
+     </releases>
+    </repository>
  </repositories>
 
  <pluginRepositories>

@@ -15,41 +15,46 @@
 	<packaging>jar</packaging>
 	<name>Web Processing Service Soil Sealing Common WPS extension</name>
 
+	<properties>
+		<jcuda.path>F:\work\code\java\itcrisp_unina\phaseIII\libs\jcuda-5.5\</jcuda.path>
+		<!-- jcuda.path>/usr/local/jcuda/</jcuda.path -->
+	</properties>
+	
 	<dependencies>
     	   	<dependency>
         		<groupId>jcuda</groupId>
         		<artifactId>jcuda</artifactId>
 	        	<version>0.5.5</version>
         		<scope>system</scope>
-        		<systemPath>/usr/local/jcuda/jcuda-0.5.5.jar</systemPath>
+        		<systemPath>${jcuda.path}jcuda-0.5.5.jar</systemPath>
     	  	</dependency>
                 <dependency>
                         <groupId>jcuda</groupId>
                         <artifactId>jcublas</artifactId>
                         <version>0.5.5</version>
                         <scope>system</scope>
-                        <systemPath>/usr/local/jcuda/jcublas-0.5.5.jar</systemPath>
+                        <systemPath>${jcuda.path}jcublas-0.5.5.jar</systemPath>
                 </dependency>
                 <dependency>
                         <groupId>jcuda</groupId>
                         <artifactId>jcufft</artifactId>
                         <version>0.5.5</version>
                         <scope>system</scope>
-                        <systemPath>/usr/local/jcuda/jcufft-0.5.5.jar</systemPath>
+                        <systemPath>${jcuda.path}jcufft-0.5.5.jar</systemPath>
                 </dependency>
                 <dependency>
                         <groupId>jcuda</groupId>
                         <artifactId>jcurand</artifactId>
                         <version>0.5.5</version>
                         <scope>system</scope>
-                        <systemPath>/usr/local/jcuda/jcurand-0.5.5.jar</systemPath>
+                        <systemPath>${jcuda.path}jcurand-0.5.5.jar</systemPath>
                 </dependency>
                 <dependency>
                         <groupId>jcuda</groupId>
                         <artifactId>jcusparse</artifactId>
                         <version>0.5.5</version>
                         <scope>system</scope>
-                        <systemPath>/usr/local/jcuda/jcusparse-0.5.5.jar</systemPath>
+                        <systemPath>${jcuda.path}jcusparse-0.5.5.jar</systemPath>
                 </dependency>
 
 		<dependency>

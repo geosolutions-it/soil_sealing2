@@ -36,6 +36,8 @@ import javax.media.jai.operator.MosaicDescriptor;
 import org.geoserver.catalog.FeatureTypeInfo;
 import org.geoserver.wps.gs.CoverageImporter;
 import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
 import org.geotools.coverage.Category;
 import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
@@ -72,31 +74,36 @@ import org.opengis.referencing.operation.TransformException;
 import com.sun.media.imageioimpl.common.ImageUtil;
 import com.vividsolutions.jts.geom.Geometry;
 
+@SuppressWarnings("deprecation")
 public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess {
 
     /** Logger used for logging exceptions */
     public static final Logger LOGGER = Logger.getLogger(UrbanGridProcess.class.toString());
 
     /** Select Current Cuda Device */
-    //public static final int gpuDevice = 0;
-    
+    // public static final int gpuDevice = 0;
+
     /** Default Pixel Area */
     private static final double PIXEL_AREA = 400;
 
     private static final CropCoverage CROP = new CropCoverage();
 
     /** Imperviousness Vectorial Layer */
+    @SuppressWarnings("unused")
     private FeatureTypeInfo imperviousnessReference;
 
     /** Path associated to the shapefile of the reference image */
+    @SuppressWarnings("unused")
     private String referenceYear;
 
     /** Path associated to the shapefile of the current image */
+    @SuppressWarnings("unused")
     private String currentYear;
-    
+
     /** Set whether the superuser is performing a test a (cuda) codes to calculate GUI indices */
     public final static boolean TESTING = true;
-    public final static String TESTING_DIR = "/media/DATI/db-backup/ssgci-data/testing";//"/opt/soil_sealing/exchange_data/testing";
+
+    public final static String TESTING_DIR = "/media/DATI/db-backup/ssgci-data/testing";// "/opt/soil_sealing/exchange_data/testing";
 
     public UrbanGridCUDAProcess(FeatureTypeInfo imperviousnessReference, String referenceYear,
             String currentYear) {
@@ -114,22 +121,25 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     public List<StatisticContainer> execute(
             @DescribeParameter(name = "reference", description = "Name of the reference raster") GridCoverage2D referenceCoverage,
             @DescribeParameter(name = "now", description = "Name of the new raster") GridCoverage2D nowCoverage,
-            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") int index,
-            @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") String subId,
+            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") SoilSealingIndexType soilSealingIndexType,
+            @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") SoilSealingSubIndexType subId,
             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
-            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) throws IOException {
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius)
+            throws IOException {
 
-        // Check on the index 7
-        boolean nullSubId = subId == null || subId.isEmpty();
-        boolean subIndexA = !nullSubId && subId.equalsIgnoreCase("a");
-        boolean subIndexC = !nullSubId && subId.equalsIgnoreCase("c");
-        boolean subIndexB = !nullSubId && subId.equalsIgnoreCase("b");
-        if (index == SEVENTH_INDEX && (nullSubId || !(subIndexA || subIndexB || subIndexC))) {
-            throw new IllegalArgumentException("Wrong subindex for index 7");
+        // Checks on the index 7 "Dispersive Urban Growth"
+        boolean nullSubId = subId == null;
+        boolean subIndexA = !nullSubId && subId == SoilSealingSubIndexType.URBAN_AREA;
+        boolean subIndexC = !nullSubId && subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO;
+        boolean subIndexB = !nullSubId && subId == SoilSealingSubIndexType.OTHER_POLYGONS_RATIO;
+        
+        if (soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH
+                && (nullSubId || !(subIndexA || subIndexB || subIndexC))) {
+            throw new IllegalArgumentException("Wrong subindex for index 7 [" + soilSealingIndexType + "]");
         }
         // Check if almost one coverage is present
         if (referenceCoverage == null && nowCoverage == null) {
@@ -146,18 +156,18 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         // Check if Geometry area or perimeter must be calculated
         boolean inRasterSpace = true;
         // Selection of the operation to do for each index
-        switch (index) {
-        case FIFTH_INDEX:
-        case SIXTH_INDEX:
-        case SEVENTH_INDEX:
-        case ELEVENTH_INDEX:
-        case TWELVE_INDEX:
-            if (!subIndexA) {
-                inRasterSpace = false;
-            }
-            break;
-        default:
-            break;
+        switch (soilSealingIndexType) {
+            case URBAN_DISPERSION:
+            case EDGE_DENSITY:
+            case DISPERSIVE_URBAN_GROWTH:
+            case MODEL_URBAN_DEVELOPMENT:
+            case NEW_URBANIZATION:
+                if (!subIndexA) {
+                    inRasterSpace = false;
+                }
+                break;
+            default:
+                break;
         }
 
         // If the index is 7a-8-9-10 then the input Geometries must be transformed to the Model Space
@@ -181,49 +191,35 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
 
         // Check if the Geometries must be reprojected
-/*        Object userData = geoms.get(0).getUserData();
-        if (!inRasterSpace && userData instanceof CoordinateReferenceSystem) {
-            CoordinateReferenceSystem geomCRS = (CoordinateReferenceSystem) userData;
-            CoordinateReferenceSystem refCRS = referenceCoverage.getCoordinateReferenceSystem();
-            MathTransform tr = null;
-            try {
-                tr = CRS.findMathTransform(geomCRS, refCRS);
+        /*
+         * Object userData = geoms.get(0).getUserData(); if (!inRasterSpace && userData instanceof CoordinateReferenceSystem) {
+         * CoordinateReferenceSystem geomCRS = (CoordinateReferenceSystem) userData; CoordinateReferenceSystem refCRS =
+         * referenceCoverage.getCoordinateReferenceSystem(); MathTransform tr = null; try { tr = CRS.findMathTransform(geomCRS, refCRS);
+         * 
+         * if (!(tr == null || tr.isIdentity())) { int geosize = geoms.size(); for (int i = 0; i < geosize; i++) { Geometry geo = geoms.get(i);
+         * Geometry transform = JTS.transform(geo, tr); transform.setUserData(refCRS); geoms.set(i, transform); } } } catch (Exception e) {
+         * LOGGER.log(Level.SEVERE, e.getMessage(), e); throw new ProcessException(e); } // Otherwise only set the correct User_Data parameter } else
+         * if (inRasterSpace){
+         */ int geosize = geoms.size();
+        final CoordinateReferenceSystem refCrs = referenceCoverage.getCoordinateReferenceSystem();
+        for (int i = 0; i < geosize; i++) {
+            Geometry geo = geoms.get(i);
 
-                if (!(tr == null || tr.isIdentity())) {
-                    int geosize = geoms.size();
-                    for (int i = 0; i < geosize; i++) {
-                        Geometry geo = geoms.get(i);
-                        Geometry transform = JTS.transform(geo, tr);
-                        transform.setUserData(refCRS);
-                        geoms.set(i, transform);
-                    }
-                }
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                throw new ProcessException(e);
-            }
-            // Otherwise only set the correct User_Data parameter
-        } else if (inRasterSpace){
-*/          int geosize = geoms.size();
-			final CoordinateReferenceSystem refCrs = referenceCoverage.getCoordinateReferenceSystem();
-            for (int i = 0; i < geosize; i++) {
-                Geometry geo = geoms.get(i);
-                
-                geo.setUserData(refCrs);
-                
-                if (geo.getSRID() == 0) {
-                	try {
-						geo.setSRID(CRS.lookupEpsgCode(refCrs, true));
-					} catch (FactoryException e) {
-						LOGGER.log(Level.WARNING, e.getMessage(), e);
-					}
+            geo.setUserData(refCrs);
+
+            if (geo.getSRID() == 0) {
+                try {
+                    geo.setSRID(CRS.lookupEpsgCode(refCrs, true));
+                } catch (FactoryException e) {
+                    LOGGER.log(Level.WARNING, e.getMessage(), e);
                 }
             }
-//        }
+        }
+        // }
 
         // Empty arrays containing the statistics results
-        double[] statsRef         = null;
-        double[] statsNow         = null;
+        double[] statsRef = null;
+        double[] statsNow = null;
         double[][][] statsComplex = null;
 
         // Create a new List of CUDA Bean objects
@@ -231,9 +227,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
         // Loop around all the Geometries and generate a new CUDA Bean object
         try {
-            //MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
+            // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
-            int buffer = (index == 12 ? radius : 0);
+            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
@@ -268,33 +264,33 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
 
         // Calculate the index using CUDA
-//		System.out.println( java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
-//      long startTime = System.currentTimeMillis();
+        // System.out.println( java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
+        // long startTime = System.currentTimeMillis();
         /**
-         * 	Generalize:
-         * 		> isUrban = false/true			------------------------|
-         * 		> RADIUS [meters] = scalar		---------------------------------|
+         * Generalize: > isUrban = false/true ------------------------| > RADIUS [meters] = scalar ---------------------------------|
          */
         Object output = null;
-		try {
-			output = calculateCUDAIndex(index, subId, beans, rural, radius);
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-//		long estimatedTime = System.currentTimeMillis() - startTime;
-//		System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
-		Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
-        
+        try {
+            output = calculateCUDAIndex(soilSealingIndexType, subId, beans, rural, radius);
+        } catch (FileNotFoundException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        // long estimatedTime = System.currentTimeMillis() - startTime;
+        // System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
+        Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
+
         // For index 8 calculate the final Image
-        if (index == 8 || index == 9 || index == 12) {
-        	
-        	System.out.println("rural="+rural + " -- radius/buffer="+radius+" [m]");
-        	
+        if (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
+            soilSealingIndexType == SoilSealingIndexType.LAND_TAKE || 
+            soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
+
+            LOGGER.fine("rural=" + rural + " -- radius/buffer=" + radius + " [m]");
+
             List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
             double[][][] images = (double[][][]) output;
-            
+
             int numGeo = beans.size();
             // Images to mosaic
             RenderedImage[] refImgs = new RenderedImage[numGeo];
@@ -302,7 +298,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
             // Giuliano tested for 91 municipalities in NAPLES and it FAILED within the following FOR loop!!
             for (int i = 0; i < numGeo; i++) {
-            	double[][] refData = images[i];
+                double[][] refData = images[i];
                 CUDABean bean = beans.get(i);
                 double[] data = refData[0];
                 if (data != null) {
@@ -319,19 +315,19 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             layout.setHeight(refRect.height);
 
             RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
-            
-            // Mosaic of the images
-            double[] background = (index==8||index==12?new double[]{-1.0}:new double[]{0.0});
-			RenderedImage finalRef = MosaicDescriptor.create(refImgs,
-                    MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null,
-                    background, hints);
 
-             //RenderedImageBrowser.showChain(finalRef, false, false);
+            // Mosaic of the images
+            double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+                    ? new double[] { -1.0 } : new double[] { 0.0 });
+            RenderedImage finalRef = MosaicDescriptor.create(refImgs,
+                    MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null, background, hints);
+
+            // RenderedImageBrowser.showChain(finalRef, false, false);
 
             // Upgrade of the statistics container
             stats.setReferenceImage(finalRef);
             // Check if the same calculations must be done for the Current coverage
-            if (nowCoverage != null && index != 9) {
+            if (nowCoverage != null && soilSealingIndexType != SoilSealingIndexType.LAND_TAKE) {
                 RenderedImage[] currImgs = new RenderedImage[numGeo];
                 RenderedImage[] diffImgs = new RenderedImage[numGeo];
                 for (int i = 0; i < numGeo; i++) {
@@ -345,13 +341,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 }
                 // Mosaic of the images
                 RenderedImage finalCurr = MosaicDescriptor.create(currImgs,
-                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null,
-                        roiObjs, null, background, hints);
+                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null, background,
+                        hints);
 
                 // Mosaic of the images
                 RenderedImage finalDiff = MosaicDescriptor.create(diffImgs,
-                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null,
-                        roiObjs, null, background, hints);
+                        MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null, background,
+                        hints);
                 // Update the statistics container
                 stats.setNowImage(finalCurr);
                 stats.setDiffImage(finalDiff);
@@ -359,30 +355,28 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             results.add(stats);
             return results;
         }
-        /*else if (index == 9) {// LAND TAKE
-            double[][][] values = (double[][][]) output;
-            statsRef = values[0][0];
-            statsNow = values[0].length > 1 ? values[0][1] : null;
-        }*/
-        else if (index == 11) {// MODEL OF URBAN DEVELOPMENT
-        	statsComplex = (double[][][]) output;
-        }
-        else {
+        /*
+         * else if (index == 9) {// LAND TAKE double[][][] values = (double[][][]) output; statsRef = values[0][0]; statsNow = values[0].length > 1 ?
+         * values[0][1] : null; }
+         */
+        else if (soilSealingIndexType == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT) {
+            statsComplex = (double[][][]) output;
+        } else {
             double[][][] values = (double[][][]) output;
             statsRef = new double[values.length];
             statsNow = (values[0][0].length > 1 ? new double[values.length] : null);
-            
-            for (int v=0; v<values.length; v++)
-            {
+
+            for (int v = 0; v < values.length; v++) {
                 statsRef[v] = values[v][0][0];
                 if (values[v][0].length > 1) {
-                	statsNow[v] = values[v][0][1];
+                    statsNow[v] = values[v][0][1];
                 }
             }
         }
 
         // Result accumulation
-        List<StatisticContainer> results = accumulateResults(rois, statsRef, statsNow, statsComplex);
+        List<StatisticContainer> results = accumulateResults(rois, statsRef, statsNow,
+                statsComplex);
 
         return results;
 
@@ -391,243 +385,233 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     /**
      * Method for calculating the selected index using the underlying CUDA
      * 
-     * @param index
+     * @param soilSealingIndexType
      * @param subId
      * @param areaPx
      * @param statsRef
      * @param statsNow
      * @param beans
-     * @throws IOException 
+     * @throws IOException
      */
-    @SuppressWarnings("unused")
-	private Object calculateCUDAIndex(int index, String subId, List<CUDABean> beans,
-            boolean rural, int ray_meters) throws IOException {
-        /*	NOTES:
-         * 		(1)	I don't like numeric index, because we might change order (or whatever).
-         * 			A string index might be more general.
-         * 		(2)	We need to define how to pass the correct year when 1 year (ref or curr)
-         * 			is selected from within the MapStore GUI.
-         * 			I think that one solution could be to delete the for loop on n_years, 
-         * 			and call once fragmentation code using one of 1/2/3 (1:ref; 2:curr; 3:diff)
-         * 			(when 3:diff is passed, JCuda has to launch the set of kernels 3 times, so it
-         * 			
-         * 		(3) We have to pass in input the sub-index value, in order to compute the correct
-         * 			7th index (and delete subId_tmp accordingly).
+    @SuppressWarnings("static-access")
+    private Object calculateCUDAIndex(SoilSealingIndexType soilSealingIndexType, SoilSealingSubIndexType subId, List<CUDABean> beans, boolean rural,
+            int ray_meters) throws IOException {
+        /*
+         * NOTES: (1) I don't like numeric index, because we might change order (or whatever). A string index might be more general. (2) We need to
+         * define how to pass the correct year when 1 year (ref or curr) is selected from within the MapStore GUI. I think that one solution could be
+         * to delete the for loop on n_years, and call once fragmentation code using one of 1/2/3 (1:ref; 2:curr; 3:diff) (when 3:diff is passed,
+         * JCuda has to launch the set of kernels 3 times, so it
+         * 
+         * (3) We have to pass in input the sub-index value, in order to compute the correct 7th index (and delete subId_tmp accordingly).
          */
 
         // FOR INDEX 8 I WOULD EXPECT A MATRIX 1/3 x N_GEOMETRIES X (IMAGE DATA)
         // WHERE
-    	// 	LINE 0 == REFERENCE TIME DATA
-        // 	LINE 1 == CURRENT TIME DATA
-        // 	LINE 2 == DIFFERENCE BETWEEN THE OTHER DATA
+        // LINE 0 == REFERENCE TIME DATA
+        // LINE 1 == CURRENT TIME DATA
+        // LINE 2 == DIFFERENCE BETWEEN THE OTHER DATA
         // MATRIX DATA TYPE SHOULD BE BYTE
-    	
-    	/**	Change as required
-    	 */
-    	// number of administrative units:
-    	int n_adm_units 	= beans.size();
-        int n_years 		= beans.get(0).getCurrentImage() != null ? 2 : 1;
-        double areaPix      = beans.get(0).getAreaPx();
-    	int CELLSIZE 		= beans.get(0).getCellSize();
-    	int ray_pixels 		= ray_meters/CELLSIZE;
+
+        /**
+         * Change as required
+         */
+        // number of administrative units:
+        int n_adm_units = beans.size();
+        int n_years = beans.get(0).getCurrentImage() != null ? 2 : 1;
+        double areaPix = beans.get(0).getAreaPx();
+        int CELLSIZE = beans.get(0).getCellSize();
+        int ray_pixels = ray_meters / CELLSIZE;
         double[][][] result = new double[n_adm_units][3][];
-        int Distribution 	= 90;// P90! but we should put this on the GUI...
-    	
-        
+        int Distribution = 90;// P90! but we should put this on the GUI...
+
         // ***IMPERVIOUSENESS STACK :: save BIN & ROI on hdd***
         // I assume that the test is performed using ONE admin and ONE year.
         // I should add other Input parameters according to the selected index.
         // I save other intermediate results on hdd within the corresponding java class
-        if(TESTING && index>4)
-        {
-        	try {
-                int WIDTH 			= beans.get(0).width;
-                int HEIGHT			= beans.get(0).height;
+        if (TESTING && soilSealingIndexType.getIdx() > 4) {
+            try {
+                int WIDTH = beans.get(0).width;
+                int HEIGHT = beans.get(0).height;
                 // ROI
-				storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi, DataBuffer.TYPE_BYTE, "ssgci_roi");
-				storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(), DataBuffer.TYPE_BYTE, "ssgci_bin");
-				if(n_years>1)
-					storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(), DataBuffer.TYPE_BYTE, "ssgci_bin2");
-			} catch (IOException e) {
-				LOGGER.log(Level.WARNING, "Could not save GeoTIFF Sample for testing", e);
-			}
-        }    
-        
-        
+                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi, DataBuffer.TYPE_BYTE, "ssgci_roi");
+                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(), DataBuffer.TYPE_BYTE, "ssgci_bin");
+                if (n_years > 1)
+                    storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(), DataBuffer.TYPE_BYTE, "ssgci_bin2");
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Could not save GeoTIFF Sample for testing", e);
+            }
+        }
+
         // I WOULD EXPECT A 2 X N_GEOMETRIS MATRIX
         // WHERE LINE 0 == INDEX VALUES FOR REFERENCE TIME
         // WHERE LINE 1 == INDEX VALUES FOR CURRENT TIME
-        //double[][] result = new double[n_adm_units][n_years];
-        //if (n_years == 2) {
-        //	some cuda code
-    	//}
+        // double[][] result = new double[n_adm_units][n_years];
+        // if (n_years == 2) {
+        // some cuda code
+        // }
         CUDAClass cuda = new CUDAClass();
-        	switch( index ){
+        switch (soilSealingIndexType) {
 
-        		// ------- CORINE LAND COVER -------
-        		case 1:  // coverage coefficient
-        			System.out.println("Not yet implemented");
-        			return null;
-        			
-        		case 2:  // rate of change
-        			System.out.println("Not yet implemented");
-        			return null;
-        			
-        		case 3:  // marginal land take
-        			System.out.println("Not yet implemented");
-        			return null;
-        			
-        		case 4:  // urban sprawl
-        			System.out.println("Not yet implemented");
-        			return null;
-        		
-        		// ------- IMPERVIOUSNESS ------- 	
-        		case 5:  // urban sprawl [ccl+sum(hist(~polyMax))]
-        			
-        			// loop for each administrative unit
-                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
-                    	// number of grids per admin_unit to give in output:
-                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                    		result[j][i] = new double[1];
-                    		if (isFeasible) {
-                    			result[j][i][0] = cuda.urban_sprawl( beans, areaPix, i, j, Distribution );
-                    		}
-                    		else
-                    			result[j][i][0] = Double.NaN;
+        // ------- CORINE LAND COVER -------
+        case COVERAGE_COEFFICIENT:
+            LOGGER.warning("Not yet implemented");
+            return null;
+
+        case RATE_OF_CHANGE:
+            LOGGER.warning("Not yet implemented");
+            return null;
+
+        case MARGINAL_LAND_TAKE:
+            LOGGER.warning("Not yet implemented");
+            return null;
+
+        case URBAN_SPRAWL:
+            LOGGER.warning("Not yet implemented");
+            return null;
+
+        // ------- IMPERVIOUSNESS -------
+        case URBAN_DISPERSION: // urban dispersion [ccl+sum(hist(~polyMax))]
+
+            // loop for each administrative unit
+            for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
+                // number of grids per admin_unit to give in output:
+                for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
+                    boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    result[j][i] = new double[1];
+                    if (isFeasible) {
+                        result[j][i][0] = cuda.urban_sprawl(beans, areaPix, i, j, Distribution);
+                    } else
+                        result[j][i][0] = Double.NaN;
+                }
+                /*
+                 * if (n_years>1) { result[j][n_years][0] = result[j][1][0]-result[j][0][0]; }
+                 */
+            }
+            return result;
+
+        case EDGE_DENSITY: // edge density [perimeter]
+                // loop for each administrative unit
+            for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
+                // number of grids per admin_unit to give in output:
+                for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
+                    boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    result[j][i] = new double[1];
+                    if (isFeasible)
+                        result[j][i][0] = CUDAClass.edge_density(beans, areaPix, i, j);
+                    else
+                        result[j][i][0] = Double.NaN;
+                }
+            }
+            return result;
+
+        case DISPERSIVE_URBAN_GROWTH: // urban diffusion
+                // loop for each administrative unit
+            for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
+                // number of grids per admin_unit to give in output:
+                for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
+                    boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    result[j][i] = new double[1];
+                    if (isFeasible) {
+                        if (subId == SoilSealingSubIndexType.URBAN_AREA) { // urban_area [reduction]* --> a modification from original occurred!
+                            result[j][i][0] = cuda.urban_area(beans, areaPix, i, j);
+                        } else if (subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO) { // area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
+                            result[j][i][0] = cuda.highest_polygon_ratio(beans, areaPix, i, j);
+                        } else if (subId == SoilSealingSubIndexType.OTHER_POLYGONS_RATIO) { // average area of other polygons [ccl+hist]
+                            result[j][i][0] = cuda.others_polygons_avesurf(beans, areaPix, i, j);
                         }
-                    	/*if (n_years>1) {
-                    		result[j][n_years][0] = result[j][1][0]-result[j][0][0];
-                    	}*/
+                    } else {
+                        result[j][i] = new double[] { Double.NaN };
                     }
-        			return result;
-        			
-        		case 6:  // edge density [perimeter]
-        			// loop for each administrative unit
-                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
-                    	// number of grids per admin_unit to give in output:
-                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                    		result[j][i] = new double[1];
-                    		if (isFeasible)
-                    			result[j][i][0] = CUDAClass.edge_density( beans, areaPix, i, j );
-                    		else
-                    			result[j][i][0] = Double.NaN;
+                }
+            }
+            return result;
+        case FRAGMENTATION: // FRAGMENTATION [myFragProg]
+            // double[][][] result = new double[n_adm_units][3][];
+            /*
+             * result = [admin(i)] [year=3] [maplen=HEIGHT(i)*WIDTH(i)]
+             */
+            // loop for each administrative unit
+            for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
+                // number of grids per admin_unit to give in output:
+                for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
+                    boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    if (isFeasible)
+                        result[j][i] = CUDAClass.fragmentation(beans, rural, ray_pixels, i, j);
+                    else
+                        result[j][i] = new double[] { Double.NaN };
+                }
+                if (n_years > 1) {
+                    // TODO: result[j][n_years] = CUDAClass.mapDifference(beans, result[j][0], result[j][1]);
+                    if (result[j][0][0] == Double.NaN || result[j][1][0] == Double.NaN) {
+                        result[j][n_years] = new double[] { Double.NaN };
+                    } else {
+                        result[j][n_years] = new double[result[j][0].length];
+                        for (int ii = 0; ii < result[j][0].length; ii++) {
+                            result[j][n_years][ii] = result[j][1][ii] - result[j][0][ii];
                         }
                     }
-                	return result;
-        			
-        		case 7:  // urban diffusion
-        			// loop for each administrative unit
-                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
-                    	// number of grids per admin_unit to give in output:
-                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                    		result[j][i] = new double[1];
-                    		if (isFeasible)
-                    		{
-	                    		if(subId.equalsIgnoreCase("a")){ 		// urban_area [reduction]* --> a modification from original occurred!
-	                    			result[j][i][0] = cuda.urban_area( beans, areaPix, i, j );
-	                    		}else if(subId.equalsIgnoreCase("b")){	// area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
-	                    			result[j][i][0] = cuda.highest_polygon_ratio(beans, areaPix, i, j);
-	                    		}else if(subId.equalsIgnoreCase("c")){	// average area of other polygons [ccl+hist]
-	                    			result[j][i][0] = cuda.others_polygons_avesurf(beans, areaPix, i, j);
-	                    		}
-                    		} else {
-                    			result[j][i] = new double[]{Double.NaN};
-                    		}
-                    	}
-                    }
-        			return result;
-        		case 8:  // FRAGMENTATION [myFragProg]
-                    //double[][][] result = new double[n_adm_units][3][];
-        			/*
-        			 * result = [admin(i)] [year=3] [maplen=HEIGHT(i)*WIDTH(i)]
-        			 */
-                    // loop for each administrative unit
-                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
-                    	// number of grids per admin_unit to give in output:
-                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                    		if (isFeasible)
-                    			result[j][i] = CUDAClass.fragmentation( beans, rural, ray_pixels, i, j );
-                    		else
-                    			result[j][i] = new double[]{Double.NaN};
+                }
+            }
+            return result;
+        case LAND_TAKE: // LAND TAKE
+            for (int j = 0; j < n_adm_units; j++) {
+                final List<double[]> resultCuda = CUDAClass.land_take(beans, j);
+                // rearrange to fit the middleware process and GUI code requirements
+                /*
+                 * result[j][0] = resultCuda.get(0);// MAP result[j][1] = resultCuda.get(1);// COUNTS "+1" [ha] result[j][2] = resultCuda.get(1);//
+                 * COUNTS "-1" [ha]
+                 */
+
+                // number of grids per admin_unit to give in output:
+                result[j][0] = resultCuda.get(0);// MAP
+            }
+            return result;
+        case POTENTIAL_LOSS_FOOD_SUPPLY: // potential loss of food supply
+            for (int j = 0; j < n_adm_units; j++) {
+                // rearrange to fit the middleware process and GUI code requirements
+                result[j][0] = new double[1];
+                result[j][0][0] = CUDAClass.potloss_foodsupply(beans, j);
+            }
+            return result;
+        case MODEL_URBAN_DEVELOPMENT:
+            // loop for each administrative unit
+            for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
+                // number of grids per admin_unit to give in output:
+                for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
+                    boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                    result[j][i] = new double[3];
+                    if (isFeasible) {
+                        result[j][i] = cuda.modelUrbanDevelopment(beans, areaPix, i, j); // [X,Y1,Y2]
+                        for (int k = 0; k < result[j][i].length; k++) {
+                            if (Double.isInfinite(result[j][i][k])
+                                    || Double.isNaN(result[j][i][k])) {
+                                result[j][i][k] = 0.0;
+                            }
                         }
-                    	if (n_years>1) {
-                    		// TODO: result[j][n_years] = CUDAClass.mapDifference(beans, result[j][0], result[j][1]);
-                    		if(result[j][0][0] == Double.NaN || result[j][1][0] == Double.NaN) {
-                    			result[j][n_years] = new double[]{Double.NaN};
-                    		}
-                    		else {
-	                    		result[j][n_years] = new double[result[j][0].length];
-	                    		for(int ii=0;ii<result[j][0].length;ii++)
-	                    		{
-	                        		result[j][n_years][ii] = result[j][1][ii]-result[j][0][ii];
-	                        	}
-                    		}
-                    	}
-        			}
-                    return result;
-        		case 9:	 // LAND TAKE
-                    for (int j = 0; j < n_adm_units; j++) {
-                    	final List<double[]> resultCuda = CUDAClass.land_take( beans, j );
-                    	// rearrange to fit the middleware process and GUI code requirements
-                    	/*result[j][0] = resultCuda.get(0);// MAP
-                    	result[j][1] = resultCuda.get(1);// COUNTS "+1" [ha]
-                    	result[j][2] = resultCuda.get(1);// COUNTS "-1" [ha]*/
-                    	
-                    	// number of grids per admin_unit to give in output:
-                    	result[j][0] = resultCuda.get(0);// MAP
-                    }
-        			return result;
-        		case 10: // potential loss of food supply
-                    for (int j = 0; j < n_adm_units; j++) {
-                    	// rearrange to fit the middleware process and GUI code requirements
-                    	result[j][0] = new double[1];
-                    	result[j][0][0] = CUDAClass.potloss_foodsupply(beans, j);
-                    }
-        			return result;
-        		case 11:
-        			// loop for each administrative unit
-                    for (int j = 0; j < n_adm_units; j++) {	// lauch for administrative units
-                    	// number of grids per admin_unit to give in output:
-                    	for (int i = 0; i < n_years; i++) {	// launch for ref/curr/diff
-                    		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                    		result[j][i] = new double[3];
-                    		if (isFeasible) {
-                    			result[j][i] = cuda.modelUrbanDevelopment(beans, areaPix, i, j); 		// [X,Y1,Y2]
-                    			for (int k = 0; k < result[j][i].length; k++) {
-                    				if(Double.isInfinite(result[j][i][k]) 
-                    						|| Double.isNaN(result[j][i][k])) {
-                    					result[j][i][k] = 0.0;
-                    				}
-                    			}
-                    		}
-                    		else
-                    			result[j][i] = new double[]{0.0, 0.0, 0.0};
-                    	}
-                    }
-        			return result;
-                case 12: // LABEL = "Simulate new urbanization", must be run after fragmentation?
-                    int i = 0;  // fictitious year
-                	for (int j = 0; j < n_adm_units; j++) {
-                        // NOTE:
-                        //  This index should be run after fragmentation using one year!!
-                        //      --> this way I take rural & ray_pixels/RADIUS from previous run! (I can anyway set default values for both)
-                        //      --> I should use also the same beans as before
-                        
-                        // I have to wrap any following class in a dedicated class for new urbanization process
-                        // in order to calculate the required specific inputs!!
-                		boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                		if(isFeasible)
-                			result[j][i] = CUDAClass.newUrbanization( beans, rural, ray_pixels, i, j );
-                		else
-                			result[j][i] = new double[]{Double.NaN};
-                	}
-                    return result;
-        	}
-		return null;
+                    } else
+                        result[j][i] = new double[] { 0.0, 0.0, 0.0 };
+                }
+            }
+            return result;
+        case NEW_URBANIZATION: // LABEL = "Simulate new urbanization", must be run after fragmentation?
+            int i = 0; // fictitious year
+            for (int j = 0; j < n_adm_units; j++) {
+                // NOTE:
+                // This index should be run after fragmentation using one year!!
+                // --> this way I take rural & ray_pixels/RADIUS from previous run! (I can anyway set default values for both)
+                // --> I should use also the same beans as before
+
+                // I have to wrap any following class in a dedicated class for new urbanization process
+                // in order to calculate the required specific inputs!!
+                boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
+                if (isFeasible)
+                    result[j][i] = CUDAClass.newUrbanization(beans, rural, ray_pixels, i, j);
+                else
+                    result[j][i] = new double[] { Double.NaN };
+            }
+            return result;
+        }
+        return null;
     }
 
     /**
@@ -643,32 +627,35 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @throws TransformException
      */
     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
-            Geometry geo, MathTransform transform, int buffer) throws IOException,
-            MismatchedDimensionException, TransformException {
-    	
-    	RenderedImage image = coverage.getRenderedImage();
+            Geometry geo, MathTransform transform, int buffer)
+            throws IOException, MismatchedDimensionException, TransformException {
 
-    	// 0) Check if a buffer must be applied
-    	Geometry originalGeo = (Geometry) geo.clone();
-    	if (buffer > 0) {
-        	try {
-				if (!"EPSG:4326".equals(CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
-					geo = geo.buffer(buffer);
-				} else {
-					geo = geo.buffer(buffer / 111.128);
-				}
-			} catch (FactoryException e) {
-				geo = geo.buffer(buffer);
-			}
-    	}
-    	
-		// 1) Crop the two coverages with the selected Geometry
-		GridCoverage2D crop = CROP.execute(coverage, geo, null);
-		transform = ProjectiveTransform.create((AffineTransform)crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER)).inverse();
-		
-		// 2) Extract the BufferedImage from each image
-		image = crop.getRenderedImage();
-        
+        RenderedImage image = coverage.getRenderedImage();
+
+        // 0) Check if a buffer must be applied
+        Geometry originalGeo = (Geometry) geo.clone();
+        if (buffer > 0) {
+            try {
+                if (!"EPSG:4326".equals(
+                        CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
+                    geo = geo.buffer(buffer);
+                } else {
+                    geo = geo.buffer(buffer / 111.128);
+                }
+            } catch (FactoryException e) {
+                geo = geo.buffer(buffer);
+            }
+        }
+
+        // 1) Crop the two coverages with the selected Geometry
+        GridCoverage2D crop = CROP.execute(coverage, geo, null);
+        transform = ProjectiveTransform.create(
+                (AffineTransform) crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER))
+                .inverse();
+
+        // 2) Extract the BufferedImage from each image
+        image = crop.getRenderedImage();
+
         Rectangle rectIMG = new Rectangle(image.getMinX(), image.getMinY(), image.getWidth(),
                 image.getHeight());
         ImageWorker w = new ImageWorker(image);
@@ -690,7 +677,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             ROI roiFilter = new ROIGeometry(rsFilter);
 
             // 5) Extract an array of data from the transformed ROI
-            byte[] roiData = getROIData((buffer>0?roiFilter:roiGeo), rectIMG);
+            byte[] roiData = getROIData((buffer > 0 ? roiFilter : roiGeo), rectIMG);
             bean.setRoi(roiData);
             bean.setRoiObj(roiGeo);
 
@@ -707,8 +694,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             bean.setCurrentImage(byteData);
         }
 
-    	// 7) Store the Reference Covergae containing the geospatial info
-    	bean.setReferenceCoverage(coverage);
+        // 7) Store the Reference Covergae containing the geospatial info
+        bean.setReferenceCoverage(coverage);
     }
 
     private byte[] getROIData(ROI roi, Rectangle rectIMG) {
@@ -784,79 +771,78 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         return w.getRenderedImage();
     }
 
-	public static void storeGeoTIFFSampleImage(List<CUDABean> beans, int w, int h, Object data, int dataType, String name) throws IOException {
-		/**
-		 * create the final coverage using final envelope
-		 */
-		// Definition of the SampleModel
-		final SampleModel sm = new PixelInterleavedSampleModel(dataType, w, h, 1, w, new int[] { 0 });
-		// DataBuffer containing input data
-		
-		DataBuffer db1 = null;
-		if(dataType == DataBuffer.TYPE_INT)
-		{
-			db1 = new DataBufferInt((int[])data, w*h);
-		} else if(dataType == DataBuffer.TYPE_BYTE) {
-			db1 = new DataBufferByte((byte[])data, w*h);
-		} else if(dataType == DataBuffer.TYPE_DOUBLE) {
-			db1 = new DataBufferDouble((double[])data, w*h);
-		}
-		// Writable Raster used for creating the BufferedImage
-		final WritableRaster wr = com.sun.media.jai.codecimpl.util.RasterFactory
-				.createWritableRaster(sm, db1, new Point(0, 0));
-		final BufferedImage image = new BufferedImage(
-				ImageUtil.createColorModel(sm), wr, false, null);
+    @SuppressWarnings("serial")
+    public static void storeGeoTIFFSampleImage(List<CUDABean> beans, int w, int h, Object data,
+            int dataType, String name) throws IOException {
+        /**
+         * create the final coverage using final envelope
+         */
+        // Definition of the SampleModel
+        final SampleModel sm = new PixelInterleavedSampleModel(dataType, w, h, 1, w,
+                new int[] { 0 });
+        // DataBuffer containing input data
 
-		// hints for tiling
-		final Hints hints = GeoTools.getDefaultHints().clone();
+        DataBuffer db1 = null;
+        if (dataType == DataBuffer.TYPE_INT) {
+            db1 = new DataBufferInt((int[]) data, w * h);
+        } else if (dataType == DataBuffer.TYPE_BYTE) {
+            db1 = new DataBufferByte((byte[]) data, w * h);
+        } else if (dataType == DataBuffer.TYPE_DOUBLE) {
+            db1 = new DataBufferDouble((double[]) data, w * h);
+        }
+        // Writable Raster used for creating the BufferedImage
+        final WritableRaster wr = com.sun.media.jai.codecimpl.util.RasterFactory
+                .createWritableRaster(sm, db1, new Point(0, 0));
+        final BufferedImage image = new BufferedImage(ImageUtil.createColorModel(sm), wr, false,
+                null);
 
-		// build the output sample dimensions, use the default value ( 0 ) as
-		// the no data
-		final GridSampleDimension outSampleDimension = new GridSampleDimension(
-				"classification", new Category[] { Category.NODATA }, null)
-				.geophysics(true);
+        // hints for tiling
+        final Hints hints = GeoTools.getDefaultHints().clone();
 
-		final GridCoverage2D retValue = new GridCoverageFactory(hints).create(
-				name, image, beans.get(0).getReferenceCoverage()
-						.getEnvelope(),
-				new GridSampleDimension[] { outSampleDimension },
-				new GridCoverage[] { beans.get(0).getReferenceCoverage() },
-				new HashMap<String, Double>() {
-					{
-						put("GC_NODATA", 0d);
-					}
-				});
+        // build the output sample dimensions, use the default value ( 0 ) as
+        // the no data
+        final GridSampleDimension outSampleDimension = new GridSampleDimension("classification",
+                new Category[] { Category.NODATA }, null).geophysics(true);
 
-		final File file = new File(UrbanGridCUDAProcess.TESTING_DIR, name/*+(System.nanoTime())*/+".tif");
-		GeoTiffWriter writer = new GeoTiffWriter(file);
+        final GridCoverage2D retValue = new GridCoverageFactory(hints).create(name, image,
+                beans.get(0).getReferenceCoverage().getEnvelope(),
+                new GridSampleDimension[] { outSampleDimension },
+                new GridCoverage[] { beans.get(0).getReferenceCoverage() },
+                new HashMap<String, Double>() {
+                    {
+                        put("GC_NODATA", 0d);
+                    }
+                });
 
-		// setting the write parameters for this geotiff
-		final ParameterValueGroup gtiffParams = new GeoTiffFormat()
-				.getWriteParameters();
-		gtiffParams.parameter(
-				AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
-				.setValue(CoverageImporter.DEFAULT_WRITE_PARAMS);
-		final GeneralParameterValue[] wps = (GeneralParameterValue[]) gtiffParams
-				.values().toArray(new GeneralParameterValue[1]);
+        final File file = new File(UrbanGridCUDAProcess.TESTING_DIR,
+                name/* +(System.nanoTime()) */ + ".tif");
+        GeoTiffWriter writer = new GeoTiffWriter(file);
 
-		try {
-			writer.write(retValue, wps);
-		} finally {
-			try {
-				writer.dispose();
-			} catch (Exception e) {
-				throw new IOException("Unable to write the output raster.", e);
-			}
-		}
-	}
-	
+        // setting the write parameters for this geotiff
+        final ParameterValueGroup gtiffParams = new GeoTiffFormat().getWriteParameters();
+        gtiffParams.parameter(AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
+                .setValue(CoverageImporter.DEFAULT_WRITE_PARAMS);
+        final GeneralParameterValue[] wps = (GeneralParameterValue[]) gtiffParams.values()
+                .toArray(new GeneralParameterValue[1]);
+
+        try {
+            writer.write(retValue, wps);
+        } finally {
+            try {
+                writer.dispose();
+            } catch (Exception e) {
+                throw new IOException("Unable to write the output raster.", e);
+            }
+        }
+    }
+
     /**
      * Static class containing all the data for a single Geometry instance which will be passed to CUDA
      * 
      * @author geosolutions
      * 
      */
-	static class CUDABean {
+    static class CUDABean {
         /** Reference Coverage data array */
         byte[] referenceImage;
 
@@ -883,42 +869,42 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
         /** Image minY value */
         private int minY;
-        
+
         /** ROI value */
         private ROI roiObj;
 
-		private int cellSize;
+        private int cellSize;
 
-		private double areaPx;
+        private double areaPx;
 
-		private GridCoverage2D referenceCoverage;
+        private GridCoverage2D referenceCoverage;
 
         public byte[] getReferenceImage() {
             return referenceImage;
         }
 
         public void setReferenceCoverage(GridCoverage2D coverage) {
-        	this.referenceCoverage = coverage;
-		}
+            this.referenceCoverage = coverage;
+        }
 
         public GridCoverage2D getReferenceCoverage() {
-        	return this.referenceCoverage;
+            return this.referenceCoverage;
         }
-        
-		public int getCellSize() {
-			return cellSize;
-		}
 
-		public double getAreaPx() {
-			return areaPx;
-		}
+        public int getCellSize() {
+            return cellSize;
+        }
 
-		public void setAreaPix(double areaPx) {
-			this.areaPx = areaPx;
-			this.cellSize = (int)Math.sqrt(areaPx);
-		}
-		
-		public void setMinX(int minX) {
+        public double getAreaPx() {
+            return areaPx;
+        }
+
+        public void setAreaPix(double areaPx) {
+            this.areaPx = areaPx;
+            this.cellSize = (int) Math.sqrt(areaPx);
+        }
+
+        public void setMinX(int minX) {
             this.minX = minX;
         }
 
@@ -986,12 +972,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             return minY;
         }
 
-		public ROI getRoiObj() {
-			return roiObj;
-		}
+        public ROI getRoiObj() {
+            return roiObj;
+        }
 
-		public void setRoiObj(ROI roiObj) {
-			this.roiObj = roiObj;
-		}
+        public void setRoiObj(ROI roiObj) {
+            this.roiObj = roiObj;
+        }
     }
 }

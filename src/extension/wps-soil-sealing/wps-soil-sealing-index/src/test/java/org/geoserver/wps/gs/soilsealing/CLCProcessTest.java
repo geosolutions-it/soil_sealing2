@@ -15,6 +15,7 @@ import java.util.TreeSet;
 import javax.media.jai.TiledImage;
 
 import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridCoverageFactory;
 import org.geotools.factory.GeoTools;
@@ -233,8 +234,8 @@ public class CLCProcessTest {
 
     @Test
     public void testIdx1() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, null, classes, 1,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, null, classes,
+                SoilSealingIndexType.COVERAGE_COEFFICIENT, AREA, rois, populations, null, null);
         StatisticContainer container = result.get(0);
 
         double class3 = container.getResultsRef()[0];
@@ -246,8 +247,8 @@ public class CLCProcessTest {
 
     @Test
     public void testIdx1With2Img() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 1,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.COVERAGE_COEFFICIENT, AREA, rois, populations, null, null);
         StatisticContainer container = result.get(0);
 
         double class3r = container.getResultsRef()[0];
@@ -265,8 +266,8 @@ public class CLCProcessTest {
 
     @Test
     public void testIdx2() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 2,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.RATE_OF_CHANGE, AREA, rois, populations, null, null);
 
         StatisticContainer container = result.get(0);
 
@@ -279,8 +280,8 @@ public class CLCProcessTest {
 
     @Test
     public void testIdx3() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 3,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.MARGINAL_LAND_TAKE, AREA, rois, populations, null, null);
 
         StatisticContainer container = result.get(0);
 
@@ -292,8 +293,8 @@ public class CLCProcessTest {
 
     @Test
     public void testIdx4() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 4,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.URBAN_SPRAWL, AREA, rois, populations, null, null);
 
         StatisticContainer container = result.get(0);
 
@@ -306,20 +307,20 @@ public class CLCProcessTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testNoCoverages() {
-        List<StatisticContainer> result = new CLCProcess().execute(null, null, classes, 1, AREA,
-                rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(null, null, classes,
+                SoilSealingIndexType.COVERAGE_COEFFICIENT, AREA, rois, populations, null, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testOnlyOneCoverage() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, null, classes, 4,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, null, classes,
+                SoilSealingIndexType.URBAN_SPRAWL, AREA, rois, populations, null, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testWrongIndex() {
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 6,
-                AREA, rois, populations, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.EDGE_DENSITY, AREA, rois, populations, null, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -328,8 +329,8 @@ public class CLCProcessTest {
 
         list.add(populations.get(0));
 
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 4,
-                AREA, rois, list, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.URBAN_SPRAWL, AREA, rois, list, null, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -339,8 +340,8 @@ public class CLCProcessTest {
         list.add(populations.get(0));
         list.add(new ArrayList<Integer>());
 
-        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes, 4,
-                AREA, rois, list, null, null);
+        List<StatisticContainer> result = new CLCProcess().execute(reference, now, classes,
+                SoilSealingIndexType.URBAN_SPRAWL, AREA, rois, list, null, null);
     }
 
     @AfterClass

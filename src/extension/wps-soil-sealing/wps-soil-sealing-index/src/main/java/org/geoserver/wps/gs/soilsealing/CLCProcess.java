@@ -4,14 +4,6 @@
  */
 package org.geoserver.wps.gs.soilsealing;
 
-import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
-import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
-import it.geosolutions.jaiext.stats.Statistics;
-import it.geosolutions.jaiext.stats.Statistics.StatsType;
-import it.geosolutions.jaiext.zonal.ZonalStatsDescriptor;
-import it.geosolutions.jaiext.zonal.ZonalStatsRIF;
-import it.geosolutions.jaiext.zonal.ZoneGeometry;
-
 import java.awt.image.RenderedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +13,7 @@ import javax.media.jai.JAI;
 import javax.media.jai.ROI;
 import javax.media.jai.RenderedOp;
 
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.factory.GeoTools;
 import org.geotools.image.jai.Registry;
@@ -30,6 +23,14 @@ import org.geotools.process.gs.GSProcess;
 import org.jaitools.imageutils.ROIGeometry;
 
 import com.vividsolutions.jts.geom.Geometry;
+
+import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
+import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
+import it.geosolutions.jaiext.stats.Statistics;
+import it.geosolutions.jaiext.stats.Statistics.StatsType;
+import it.geosolutions.jaiext.zonal.ZonalStatsDescriptor;
+import it.geosolutions.jaiext.zonal.ZonalStatsRIF;
+import it.geosolutions.jaiext.zonal.ZoneGeometry;
 
 /**
  * This class calculates the indexes 1-2-3-4 from the input coverages. The user should pass the requested parameters and the index number and the
@@ -44,21 +45,10 @@ import com.vividsolutions.jts.geom.Geometry;
  * @author geosolutions
  * 
  */
+@SuppressWarnings("deprecation")
 public class CLCProcess implements GSProcess {
     /** Constant associated to the 0th idx */
     private static final int ZERO_IDX = 0;
-
-    /** Constant associated to the 1st idx */
-    public static final int FIRST_INDEX = 1;
-
-    /** Constant associated to the 2nd idx */
-    public static final int SECOND_INDEX = 2;
-
-    /** Constant associated to the 3rd idx */
-    public static final int THIRD_INDEX = 3;
-
-    /** Constant associated to the 4th idx */
-    public static final int FOURTH_INDEX = 4;
 
     /** Default pixel area */
     public static final double PIXEL_AREA = 10000;
@@ -72,8 +62,10 @@ public class CLCProcess implements GSProcess {
     public static final String JAI_EXT_PRODUCT = "it.geosolutions.jaiext";
     static {
         try {
-            Registry.registerRIF(JAI.getDefaultInstance(), new BandMergeDescriptor(), new BandMergeCRIF(), JAI_EXT_PRODUCT);
-            Registry.registerRIF(JAI.getDefaultInstance(), new ZonalStatsDescriptor(), new ZonalStatsRIF(), JAI_EXT_PRODUCT);
+            Registry.registerRIF(JAI.getDefaultInstance(), new BandMergeDescriptor(),
+                    new BandMergeCRIF(), JAI_EXT_PRODUCT);
+            Registry.registerRIF(JAI.getDefaultInstance(), new ZonalStatsDescriptor(),
+                    new ZonalStatsRIF(), JAI_EXT_PRODUCT);
         } catch (Throwable e) {
             // swallow exception in case the op has already been registered.
         }
@@ -107,12 +99,13 @@ public class CLCProcess implements GSProcess {
     // HP1 = geometries in raster space
     // HP2 = Coverages already cropped
 
+    @SuppressWarnings("unchecked")
     @DescribeResult(name = "CLCprocess", description = "CLC indexes", type = List.class)
     public List<StatisticContainer> execute(
             @DescribeParameter(name = "reference", description = "Name of the reference raster") GridCoverage2D referenceCoverage,
             @DescribeParameter(name = "now", description = "Name of the new raster") GridCoverage2D nowCoverage,
             @DescribeParameter(name = "classes", collectionType = Integer.class, min = 1, description = "The domain of the classes used in input rasters") Set<Integer> classes,
-            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") int index,
+            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") SoilSealingIndexType soilSealingIndexType,
             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
@@ -123,7 +116,7 @@ public class CLCProcess implements GSProcess {
         boolean refExists = referenceCoverage != null;
         boolean nowExists = nowCoverage != null;
 
-        if (index > FIRST_INDEX && (!nowExists || !refExists)) {
+        if (soilSealingIndexType.getIdx() > 1 && (!nowExists || !refExists)) {
             throw new IllegalArgumentException("This index needs 2 input images");
         } else if (!nowExists && !refExists) {
             throw new IllegalArgumentException("No Coverages provided");
@@ -149,41 +142,38 @@ public class CLCProcess implements GSProcess {
             percentual = multiplier;
         }
         // Other check related to the indexes
-        switch (index) {
-        case FIRST_INDEX:
-        case SECOND_INDEX:
-            break;
-        case THIRD_INDEX:
-        case FOURTH_INDEX:
-            int numPop = 0;
-            if (populations != null) {
-                numPop = populations.size();
-            }
-            if (populations == null || numPop < 2) {
-                throw new IllegalArgumentException("Some Populations are not present");
-            }
-            int numPopRef = populations.get(ZERO_IDX).size();
-            int numPopNow = populations.get(1).size();
-            if (numAreas != numPopRef || numAreas != numPopNow) {
-                throw new IllegalArgumentException("Some Areas or Populations are not present");
-            }
-            break;
-        default:
-            throw new IllegalArgumentException("Wrong index selected");
+        switch (soilSealingIndexType) {
+            case COVERAGE_COEFFICIENT:
+            case RATE_OF_CHANGE:
+                break;
+            case MARGINAL_LAND_TAKE:
+            case URBAN_SPRAWL:
+                int numPop = 0;
+                if (populations != null) {
+                    numPop = populations.size();
+                }
+                if (populations == null || numPop < 2) {
+                    throw new IllegalArgumentException("Some Populations are not present");
+                }
+                int numPopRef = populations.get(ZERO_IDX).size();
+                int numPopNow = populations.get(1).size();
+                if (numAreas != numPopRef || numAreas != numPopNow) {
+                    throw new IllegalArgumentException("Some Areas or Populations are not present");
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Wrong index selected");
         }
 
         RenderedImage inputImage = null;
+        
         // Merging of the 2 images if they are both present or selection of the single image
         if (refExists) {
             if (nowExists) {
                 double destinationNoData = 0d;
-				inputImage = BandMergeDescriptor.create(
-						null, 
-                		destinationNoData,
-                        GeoTools.getDefaultHints(), 
-                        referenceCoverage.getRenderedImage(),
-                        nowCoverage.getRenderedImage()
-                 );
+                inputImage = BandMergeDescriptor.create(null, destinationNoData,
+                        GeoTools.getDefaultHints(), referenceCoverage.getRenderedImage(),
+                        nowCoverage.getRenderedImage());
             } else {
                 inputImage = referenceCoverage.getRenderedImage();
             }
@@ -231,8 +221,7 @@ public class CLCProcess implements GSProcess {
                 null, false, bands, stats, minBound, maxBound, numBins, null, false, null);
 
         // Calculation of the results
-        List<ZoneGeometry> results = (List<ZoneGeometry>) zonalStats
-                .getProperty(ZonalStatsDescriptor.ZS_PROPERTY);
+        List<ZoneGeometry> results = (List<ZoneGeometry>) zonalStats.getProperty(ZonalStatsDescriptor.ZS_PROPERTY);
 
         // Class number
         int numClass = classes.size();
@@ -244,170 +233,162 @@ public class CLCProcess implements GSProcess {
         List<StatisticContainer> container = new ArrayList<StatisticContainer>(numAreas);
 
         // Selection of the statistics for each Zone
-        switch (index) {
-        case FIRST_INDEX:
-            // Elaboration for a 2-band image
-            if (multiBanded) {
-                // For each Geometry
-                for (ZoneGeometry zone : results) {
-                    // extraction of the statistics
-                    double[][] coeffCop = calculateCoeffCop(classes, bands, zone, area, percentual);
-                    // Geometry associated
-                    Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
-                    // Variation array
-                    double[] coeffVariation = calculateVariation(numClass, coeffCop, percentual);
-                    // Object used for storing the index results
-                    StatisticContainer statisticContainer = 
-                    		new StatisticContainer(
-                    				geo,
-                    				coeffCop[ZERO_IDX], 
-                    				coeffCop[1],
-                    				null);
-                    statisticContainer.setResultsDiff(coeffVariation);
-                    // Addition of the Statistics to a List
-                    container.add(statisticContainer);
-                }
-            } else {
-                // For each Geometry
-                for (ZoneGeometry zone : results) {
-                    // extraction of the statistics
-                    double[] coeffCop = calculateCoeffCop(classes, bands, zone, area, percentual)[ZERO_IDX];
-                    // Geometry associated
-                    Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
-                    // Addition of the Statistics to a List
-                    container.add(new StatisticContainer(geo, coeffCop, null, null));
-                }
-            }
-            break;
-        case SECOND_INDEX:
-            // For each Geometry
-            for (ZoneGeometry zone : results) {
-                double[][] coeffCop = new double[2][numClass];
-                // Cycle on the bands
-                for (int b = 0; b < numBands; b++) {
-                    // extraction of the statistics
-                    Statistics out = zone.getStatsPerBandNoClassifierNoRange(b)[ZERO_IDX];
-
-                    double[] histogram = (double[]) out.getResult();
-                    int count = 0;
-                    // Storing of all the areas inside the array
-                    for (Integer clc : classes) {
-                        double clcArea = histogram[clc] * area;
-                        coeffCop[b][count++] = clcArea;
+        switch (soilSealingIndexType) {
+            case COVERAGE_COEFFICIENT:
+                // Elaboration for a 2-band image
+                if (multiBanded) {
+                    // For each Geometry
+                    for (ZoneGeometry zone : results) {
+                        // extraction of the statistics
+                        double[][] coeffCop = calculateCoeffCop(classes, bands, zone, area, percentual);
+                        // Geometry associated
+                        Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
+                        // Variation array
+                        double[] coeffVariation = calculateVariation(numClass, coeffCop, percentual);
+                        // Object used for storing the index results
+                        StatisticContainer statisticContainer = new StatisticContainer(geo,
+                                coeffCop[ZERO_IDX], coeffCop[1], null);
+                        statisticContainer.setResultsDiff(coeffVariation);
+                        // Addition of the Statistics to a List
+                        container.add(statisticContainer);
+                    }
+                } else {
+                    // For each Geometry
+                    for (ZoneGeometry zone : results) {
+                        // extraction of the statistics
+                        double[] coeffCop = calculateCoeffCop(classes, bands, zone, area,
+                                percentual)[ZERO_IDX];
+                        // Geometry associated
+                        Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
+                        // Addition of the Statistics to a List
+                        container.add(new StatisticContainer(geo, coeffCop, null, null));
                     }
                 }
-                // Calculation of the variation array
-                double[] coeffVariation = calculateVariation(numClass, coeffCop, true);
-                // Geometry associated
-                Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
-                // Addition of the Statistics to a List
-                container.add(new StatisticContainer(geo, coeffVariation, null, null));
-            }
-            break;
-        case THIRD_INDEX:
-            // For each Geometry
-            for (ZoneGeometry zone : results) {
-                // Calculation of the sum of all the areas
-                double[] consMarg = calculateCLCSum(classes, bands, zone, area);
-                // Calculation of the index
-                double first = consMarg[ZERO_IDX];
-                double second = consMarg[1];
-                double areaVar = (second - first);
-
-                double firstPop = populations.get(ZERO_IDX).get(countZones);
-                double secondPop = populations.get(1).get(countZones);
-                double popVar = (secondPop - firstPop);
-                // Geometry associated
-                Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
-
-                double result = 0;
-
-                IndexColor color = null;
-                
-                if (coeff != null) {
-                    result = (areaVar / popVar) * coeff;
-                } else {
-                    result = areaVar / popVar;
+                break;
+            case RATE_OF_CHANGE:
+                // For each Geometry
+                for (ZoneGeometry zone : results) {
+                    double[][] coeffCop = new double[2][numClass];
+                    // Cycle on the bands
+                    for (int b = 0; b < numBands; b++) {
+                        // extraction of the statistics
+                        Statistics out = zone.getStatsPerBandNoClassifierNoRange(b)[ZERO_IDX];
+    
+                        double[] histogram = (double[]) out.getResult();
+                        int count = 0;
+                        // Storing of all the areas inside the array
+                        for (Integer clc : classes) {
+                            double clcArea = histogram[clc] * area;
+                            coeffCop[b][count++] = clcArea;
+                        }
+                    }
+                    // Calculation of the variation array
+                    double[] coeffVariation = calculateVariation(numClass, coeffCop, true);
+                    // Geometry associated
+                    Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
+                    // Addition of the Statistics to a List
+                    container.add(new StatisticContainer(geo, coeffVariation, null, null));
                 }
-                
-                // Index result
-                if (areaVar >= 0) {
-                    if (popVar >= 0) {
+                break;
+            case MARGINAL_LAND_TAKE:
+                // For each Geometry
+                for (ZoneGeometry zone : results) {
+                    // Calculation of the sum of all the areas
+                    double[] consMarg = calculateCLCSum(classes, bands, zone, area);
+                    // Calculation of the index
+                    double first = consMarg[ZERO_IDX];
+                    double second = consMarg[1];
+                    double areaVar = (second - first);
+    
+                    double firstPop = populations.get(ZERO_IDX).get(countZones);
+                    double secondPop = populations.get(1).get(countZones);
+                    double popVar = (secondPop - firstPop);
+                    // Geometry associated
+                    Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
+    
+                    double result = 0;
+    
+                    IndexColor color = null;
+    
+                    if (coeff != null) {
+                        result = (areaVar / popVar) * coeff;
+                    } else {
+                        result = areaVar / popVar;
+                    }
+    
+                    // Index result
+                    if (areaVar >= 0) {
+                        if (popVar >= 0) {
+                            color = IndexColor.GREEN;
+                        } else {
+                            color = IndexColor.YELLOW;
+                        }
+                    } else {
+                        if (popVar >= 0) {
+                            color = IndexColor.RED;
+                        } else {
+                            color = IndexColor.BLUE;
+                        }
+                    }
+    
+                    // Addition of the Statistics to a List
+                    StatisticContainer statisticContainer = new StatisticContainer(geo,
+                            new double[] { result }, null, null);
+    
+                    // Setting of the color to use
+                    if (color != null) {
+                        statisticContainer.setColor(color);
+                    }
+                    container.add(statisticContainer);
+                    // Update of the Zones
+                    countZones++;
+                }
+                break;
+            case URBAN_SPRAWL:
+                for (ZoneGeometry zone : results) {
+                    // Calculation of the sum of all the areas
+                    double[] sumArray = calculateCLCSum(classes, bands, zone, area);
+                    // Calculation of the index
+                    double first = sumArray[ZERO_IDX];
+                    double second = sumArray[1];
+                    double areaTa = ((second - first) / first);
+    
+                    double firstPop = populations.get(ZERO_IDX).get(countZones);
+                    double secondPop = populations.get(1).get(countZones);
+                    double popTa = ((secondPop - firstPop) / firstPop);
+                    // Geometry associated
+                    Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
+    
+                    double sprawl = areaTa / popTa;
+    
+                    IndexColor color = null;
+    
+                    if (sprawl > UPPER_BOUND_INDEX_4) {
+                        color = IndexColor.RED;
+                    } else if (sprawl < LOWER_BOUND_INDEX_4) {
                         color = IndexColor.GREEN;
                     } else {
                         color = IndexColor.YELLOW;
                     }
-                } else {
-                    if (popVar >= 0) {
-                        color = IndexColor.RED;
-                    } else {
-                        color = IndexColor.BLUE;
+    
+                    // Addition of the Statistics to a List
+                    StatisticContainer statisticContainer = new StatisticContainer(geo,
+                            new double[] { sprawl }, null, null);
+    
+                    // Setting of the color to use
+                    if (color != null) {
+                        statisticContainer.setColor(color);
                     }
+                    container.add(statisticContainer);
+    
+                    // Update of the Zones
+                    countZones++;
                 }
-                
-                // Addition of the Statistics to a List
-                StatisticContainer statisticContainer = 
-                		new StatisticContainer(
-                				geo, 
-                				new double[] { result }, 
-                				null, 
-                				null);
-                
-                // Setting of the color to use
-                if(color!=null){
-                    statisticContainer.setColor(color);
-                }
-                container.add(statisticContainer);
-                // Update of the Zones
-                countZones++;
-            }
-            break;
-        case FOURTH_INDEX:
-            for (ZoneGeometry zone : results) {
-                // Calculation of the sum of all the areas
-                double[] sumArray = calculateCLCSum(classes, bands, zone, area);
-                // Calculation of the index
-                double first = sumArray[ZERO_IDX];
-                double second = sumArray[1];
-                double areaTa = ((second - first) / first);
-
-                double firstPop = populations.get(ZERO_IDX).get(countZones);
-                double secondPop = populations.get(1).get(countZones);
-                double popTa = ((secondPop - firstPop) / firstPop);
-                // Geometry associated
-                Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
-
-                double sprawl = areaTa / popTa;
-                
-                IndexColor color = null;
-                
-                if (sprawl > UPPER_BOUND_INDEX_4) {
-                    color = IndexColor.RED;
-                } else if (sprawl < LOWER_BOUND_INDEX_4) {
-                    color = IndexColor.GREEN;
-                } else {
-                    color = IndexColor.YELLOW;
-                }
-                
-                // Addition of the Statistics to a List
-                StatisticContainer statisticContainer = 
-                		new StatisticContainer(
-                				geo, 
-                				new double[] { sprawl }, 
-                				null,
-                				null);
-                
-                // Setting of the color to use
-                if(color!=null){
-                    statisticContainer.setColor(color);
-                }
-                container.add(statisticContainer);
-
-                // Update of the Zones
-                countZones++;
-            }
-            break;
+                break;
+            default:
+                break;
         }
+        
         return container;
     }
 
@@ -519,20 +500,21 @@ public class CLCProcess implements GSProcess {
 
         private double[] resultsDiff;
 
-		private double[][] resultsComplex;
+        private double[][] resultsComplex;
 
-		private RenderedImage referenceImage;
+        private RenderedImage referenceImage;
 
         private RenderedImage nowImage;
 
         private RenderedImage diffImage;
-        
+
         private IndexColor color;
 
         public StatisticContainer() {
         }
 
-        public StatisticContainer(Geometry geom, double[] resultsRef, double[] resultsNow, double[][] resultsComplex) {
+        public StatisticContainer(Geometry geom, double[] resultsRef, double[] resultsNow,
+                double[][] resultsComplex) {
             this.geom = geom;
             this.resultsRef = resultsRef;
             this.resultsNow = resultsNow;
@@ -559,12 +541,12 @@ public class CLCProcess implements GSProcess {
             this.resultsRef = resultsRef;
         }
 
-		public double[][] getResultsComplex() {
-			return this.resultsComplex;
-		}
+        public double[][] getResultsComplex() {
+            return this.resultsComplex;
+        }
 
         public void setResultsComplex(double[][] resultsComplex) {
-        	this.resultsComplex = resultsComplex;
+            this.resultsComplex = resultsComplex;
         }
 
         public double[] getResultsNow() {

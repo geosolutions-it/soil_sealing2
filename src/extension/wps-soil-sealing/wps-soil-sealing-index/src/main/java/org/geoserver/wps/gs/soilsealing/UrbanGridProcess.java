@@ -37,6 +37,8 @@ import javax.media.jai.operator.BandSelectDescriptor;
 
 import org.geoserver.catalog.FeatureTypeInfo;
 import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.data.DataStore;
 import org.geotools.data.DefaultTransaction;
@@ -83,6 +85,7 @@ import com.vividsolutions.jts.geom.Point;
  * @author geosolutions
  * 
  */
+@SuppressWarnings("deprecation")
 public class UrbanGridProcess implements GSProcess {
     private static final CoordinateReferenceSystem WGS84;
 
@@ -91,30 +94,6 @@ public class UrbanGridProcess implements GSProcess {
 
     /** Constant multiplier from square meters to ha */
     public static final double HACONVERTER = 0.0001;
-
-    /** Constant associated to the 5th idx */
-    public static final int FIFTH_INDEX = 5;
-
-    /** Constant associated to the 6th idx */
-    public static final int SIXTH_INDEX = 6;
-
-    /** Constant associated to the 7th idx */
-    public static final int SEVENTH_INDEX = 7;
-
-    /** Constant associated to the 8th idx */
-    public static final int EIGHTH_INDEX = 8;
-
-    /** Constant associated to the 9th idx */
-    public static final int NINTH_INDEX = 9;
-
-    /** Constant associated to the 10th idx */
-    public static final int TENTH_INDEX = 10;
-    
-    /** Constant associated to the 11th idx */
-    public static final int ELEVENTH_INDEX = 11;
-
-    /** Constant associated to the 12th idx */
-    public static final int TWELVE_INDEX = 12;
 
     /** Header of the local Lambert-Equal Area projection */
     public static final String PROJ_HEADER = "PROJCS[\"Local area projection/ LOCAL_AREA_PROJECTION\",";
@@ -169,8 +148,10 @@ public class UrbanGridProcess implements GSProcess {
     /** Path associated to the shapefile of the current image */
     private String currentYear;
 
+    @SuppressWarnings("unused")
     private String pathToRefShp;
 
+    @SuppressWarnings("unused")
     private String pathToCurShp;
     
     public UrbanGridProcess(FeatureTypeInfo imperviousnessReference, String referenceYear, String currentYear) {
@@ -192,8 +173,8 @@ public class UrbanGridProcess implements GSProcess {
     public List<StatisticContainer> execute(
             @DescribeParameter(name = "reference", description = "Name of the reference raster") GridCoverage2D referenceCoverage,
             @DescribeParameter(name = "now", description = "Name of the new raster") GridCoverage2D nowCoverage,
-            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") int index,
-            @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") String subId,
+            @DescribeParameter(name = "index", min = 1, description = "Index to calculate") SoilSealingIndexType soilSealingIndexType,
+            @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") SoilSealingSubIndexType subId,
             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
@@ -201,12 +182,14 @@ public class UrbanGridProcess implements GSProcess {
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
             @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius) throws IOException {
 
-        // Check on the index 7
-        boolean nullSubId = subId == null || subId.isEmpty();
-        boolean subIndexA = !nullSubId && subId.equalsIgnoreCase("a");
-        boolean subIndexC = !nullSubId && subId.equalsIgnoreCase("c");
-        boolean subIndexB = !nullSubId && subId.equalsIgnoreCase("b");
-        if (index == SEVENTH_INDEX && (nullSubId || !(subIndexA || subIndexB || subIndexC))) {
+     // Checks on the index 7 "Dispersive Urban Growth"
+        boolean nullSubId = subId == null;
+        boolean subIndexA = !nullSubId && subId == SoilSealingSubIndexType.URBAN_AREA;
+        boolean subIndexC = !nullSubId && subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO;
+        boolean subIndexB = !nullSubId && subId == SoilSealingSubIndexType.OTHER_POLYGONS_RATIO;
+        
+        if (soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH 
+                && (nullSubId || !(subIndexA || subIndexB || subIndexC))) {
             throw new IllegalArgumentException("Wrong subindex for index 7");
         }
         // Check if almost one coverage is present
@@ -230,62 +213,86 @@ public class UrbanGridProcess implements GSProcess {
         classes.add(Integer.valueOf(1));
         List<List<Integer>> constantMatrix = null;
 		// Selection of the operation to do for each index
-        switch (index) {
-        case FIFTH_INDEX:
-            area = true;
-            break;
-        case SIXTH_INDEX:
-            area = false;
-            break;
-        case SEVENTH_INDEX:
-            area = true;
-            // If index is 7a raster calculation can be executed
-            if (subIndexA) {
-                return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                        CLCProcess.FIRST_INDEX, areaPx, rois, null, null, true);
-            }
-            break;
-        case EIGHTH_INDEX:
-            // Raster elaboration
-            return prepareImages(referenceCoverage, nowCoverage, rois, areaPx * HACONVERTER);
-            // For the indexes 9-10 Zonal Stats are calculated
-        case NINTH_INDEX:
-        	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
-        	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
-            /*return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                    CLCProcess.THIRD_INDEX, areaPx, rois, populations, Double.valueOf(1), null);*/
-        	
-        	// AF: Task-B36; This index should not be relative to the population.
-        	if (populations == null) {
-        		constantMatrix = GetConstFilledMatrix(2, 1, Integer.valueOf(1));
-        	} else {
-        		constantMatrix = GetConstFilledMatrix(populations.size(), populations.get(0).size(), Integer.valueOf(1));
-        	}
-            return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                    CLCProcess.THIRD_INDEX, areaPx, rois, constantMatrix, Double.valueOf(1), null);
-        case TENTH_INDEX:
-        	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
-        	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
-            if (coeff != null) {
+        switch (soilSealingIndexType) {
+            case URBAN_DISPERSION:
+                area = true;
+                break;
+            case EDGE_DENSITY:
+                area = false;
+                break;
+            case DISPERSIVE_URBAN_GROWTH:
+                area = true;
+                // If index is 7a raster calculation can be executed
+                if (subIndexA) {
+                    return new CLCProcess().execute(
+                            referenceCoverage, 
+                            nowCoverage, 
+                            classes,
+                            SoilSealingIndexType.COVERAGE_COEFFICIENT, 
+                            areaPx, 
+                            rois, 
+                            null, 
+                            null, 
+                            true);
+                }
+                break;
+            case FRAGMENTATION:
+                // Raster elaboration
+                return prepareImages(referenceCoverage, nowCoverage, rois, areaPx * HACONVERTER);
+                // For the indexes 9-10 Zonal Stats are calculated
+            case LAND_TAKE:
+            	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
+            	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
                 /*return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                        CLCProcess.THIRD_INDEX, areaPx, rois, populations, coeff, null);*/
-            	// AF: Task-B40; This index should not be relative to the population.
+                        CLCProcess.THIRD_INDEX, areaPx, rois, populations, Double.valueOf(1), null);*/
+            	
+            	// AF: Task-B36; This index should not be relative to the population.
             	if (populations == null) {
             		constantMatrix = GetConstFilledMatrix(2, 1, Integer.valueOf(1));
             	} else {
             		constantMatrix = GetConstFilledMatrix(populations.size(), populations.get(0).size(), Integer.valueOf(1));
             	}
-            	return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
-                        CLCProcess.THIRD_INDEX, areaPx, rois, constantMatrix, coeff, null);
-            } else {
-                throw new IllegalArgumentException("No coefficient provided for the selected index");
-            }
-        case ELEVENTH_INDEX:
-        case TWELVE_INDEX:
-            area = true;
-            break;        	
-        default:
-            throw new IllegalArgumentException("Wrong index declared");
+                return new CLCProcess().execute(
+                        referenceCoverage, 
+                        nowCoverage, 
+                        classes,
+                        SoilSealingIndexType.MARGINAL_LAND_TAKE, 
+                        areaPx, 
+                        rois, 
+                        constantMatrix, 
+                        Double.valueOf(1), 
+                        null);
+            case POTENTIAL_LOSS_FOOD_SUPPLY:
+            	// I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
+            	// I do NOT need to divide by POPULATION difference (Pcurrent - Preference)
+                if (coeff != null) {
+                    /*return new CLCProcess().execute(referenceCoverage, nowCoverage, classes,
+                            CLCProcess.THIRD_INDEX, areaPx, rois, populations, coeff, null);*/
+                	// AF: Task-B40; This index should not be relative to the population.
+                	if (populations == null) {
+                		constantMatrix = GetConstFilledMatrix(2, 1, Integer.valueOf(1));
+                	} else {
+                		constantMatrix = GetConstFilledMatrix(populations.size(), populations.get(0).size(), Integer.valueOf(1));
+                	}
+                	return new CLCProcess().execute(
+                	        referenceCoverage, 
+                	        nowCoverage, 
+                	        classes,
+                	        SoilSealingIndexType.MARGINAL_LAND_TAKE, 
+                                areaPx, 
+                                rois, 
+                                constantMatrix, 
+                                coeff, 
+                                null);
+                } else {
+                    throw new IllegalArgumentException("No coefficient provided for the selected index");
+                }
+            case MODEL_URBAN_DEVELOPMENT:
+            case NEW_URBANIZATION:
+                area = true;
+                break;        	
+            default:
+                throw new IllegalArgumentException("Wrong index declared");
         }
 
         // If index is not 7a-8-9-10 then the input Urban Grids must be loaded
@@ -298,11 +305,11 @@ public class UrbanGridProcess implements GSProcess {
         try {
             // For each coverage are calculated the results
             if (referenceCoverage != null && referenceYear != null && imperviousnessReference != null) {
-                statsRef = prepareResults(referenceYear, imperviousnessReference, index, rois, subIndexB, numThreads, area);
+                statsRef = prepareResults(referenceYear, imperviousnessReference, soilSealingIndexType, rois, subIndexB, numThreads, area);
             }
 
             if (nowCoverage != null && currentYear != null && imperviousnessReference != null) {
-                statsNow = prepareResults(currentYear, imperviousnessReference, index, rois, subIndexB, numThreads, area);
+                statsNow = prepareResults(currentYear, imperviousnessReference, soilSealingIndexType, rois, subIndexB, numThreads, area);
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
@@ -434,7 +441,7 @@ public class UrbanGridProcess implements GSProcess {
      * 
      * @param year Year of the shapefile to use
      * @param imperviousnessReference Layer of the shapefile to use
-     * @param index index to calculate
+     * @param soilSealingIndexType index to calculate
      * @param rois Input Administrative Areas
      * @param subIndexB Boolean indicating if the subIndex to calculate is "b"
      * @param numThreads Total number of Threads to lauch
@@ -446,7 +453,7 @@ public class UrbanGridProcess implements GSProcess {
      * @throws FactoryException
      * @throws TransformException
      */
-    private double[] prepareResults(String year, FeatureTypeInfo imperviousnessReference, int index, List<Geometry> rois,
+    private double[] prepareResults(String year, FeatureTypeInfo imperviousnessReference, SoilSealingIndexType soilSealingIndexType, List<Geometry> rois,
             boolean subIndexB, int numThreads, boolean area) throws MalformedURLException,
             IOException, InterruptedException, FactoryException, TransformException {
         // Calculation on the Urban Grids
@@ -472,17 +479,19 @@ public class UrbanGridProcess implements GSProcess {
                     double sud = sut - polyMaxArea;
 
                     // Calculation of the indexes
-                    switch (index) {
-                    case FIFTH_INDEX:
-                        stats[counter] = (sud / sut) * 100.0;
-                        break;
-                    case SEVENTH_INDEX:
-                        // Check on the subIndex selected
-                        if (subIndexB) {
-                            stats[counter] = (polyMaxArea / sut) * 100.0;
-                        } else {
-                            stats[counter] = (sud / numPolyNotMax) * HACONVERTER;
-                        }
+                    switch (soilSealingIndexType) {
+                        case URBAN_DISPERSION:
+                            stats[counter] = (sud / sut) * 100.0;
+                            break;
+                        case DISPERSIVE_URBAN_GROWTH:
+                            // Check on the subIndex selected
+                            if (subIndexB) {
+                                stats[counter] = (polyMaxArea / sut) * 100.0;
+                            } else {
+                                stats[counter] = (sud / numPolyNotMax) * HACONVERTER;
+                            }
+                        default:
+                            break;
                     }
                 } else {
                     stats[counter] = 0;
@@ -700,6 +709,7 @@ public class UrbanGridProcess implements GSProcess {
             this.area = area;
         }
 
+        @SuppressWarnings("rawtypes")
         @Override
         public void run() {
             // Selection of the Feature Source associated to the datastore

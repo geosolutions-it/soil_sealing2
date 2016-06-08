@@ -4,39 +4,47 @@
  */
 package org.geoserver.wps.gs.soilsealing.model;
 
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
+import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
+
 public class SoilSealingIndex {
 
-    private int id;
-    private String subindex;
-    public SoilSealingIndex(int id, String subindex) {
+    private SoilSealingIndexType id;
+
+    private SoilSealingSubIndexType subindex;
+
+    public SoilSealingIndex(SoilSealingIndexType soilSealingIndexType, SoilSealingSubIndexType subindex) {
         super();
-        this.id = id;
+        this.id = soilSealingIndexType;
         this.subindex = subindex;
     }
+
     /**
      * @return the id
      */
-    public int getId() {
+    public SoilSealingIndexType getId() {
         return id;
     }
+
     /**
      * @param id the id to set
      */
-    public void setId(int id) {
+    public void setId(SoilSealingIndexType id) {
         this.id = id;
     }
+
     /**
      * @return the subindex
      */
-    public String getSubindex() {
+    public SoilSealingSubIndexType getSubindex() {
         return subindex;
     }
+
     /**
      * @param subindex the subindex to set
      */
-    public void setSubindex(String subindex) {
+    public void setSubindex(SoilSealingSubIndexType subindex) {
         this.subindex = subindex;
     }
-    
-    
+
 }

@@ -1,0 +1,1 @@
+mvn -U eclipse:clean eclipse:eclipse clean install -DskipTests -nsu

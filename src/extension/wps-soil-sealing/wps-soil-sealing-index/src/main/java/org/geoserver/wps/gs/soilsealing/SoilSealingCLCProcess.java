@@ -417,7 +417,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // ///////////////////////////////////////////////////////////////
             SoilSealingDTO soilSealingIndexResult = new SoilSealingDTO();
 
-            SoilSealingIndex soilSealingIndex = new SoilSealingIndex(SoilSealingIndexType.translateIndex(index), SoilSealingSubIndexType.translate(subIndex));
+            SoilSealingIndex soilSealingIndex = new SoilSealingIndex(index, subIndex);
             soilSealingIndexResult.setIndex(soilSealingIndex);
 
             double[][] refValues = new double[indexValue.size()][];

@@ -18,4 +18,9 @@
 		<constructor-arg index="0" ref="geoServer" />
 	</bean>
 
+    <!-- Register WFS Transaction Listener -->
+    <!--  bean id="soilSealingTransactionListener" class="org.geoserver.wfs.gs.SoilSealingTransactionListener">
+    	<constructor-arg ref="catalog" />
+    </bean -->
+    
 </beans>

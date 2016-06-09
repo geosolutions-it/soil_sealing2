@@ -99,6 +99,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
      */
     public static enum SoilSealingIndexType {
 
+        VOID(-1, ""),
         COVERAGE_COEFFICIENT(1, "Coverage coefficient"), 
         RATE_OF_CHANGE(2, "Rate of Change"), 
         MARGINAL_LAND_TAKE(3, "Marginal Land Take"), 
@@ -136,7 +137,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 }
             }
             
-            return null;
+            return VOID;
         }
     }
 
@@ -147,6 +148,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
      */
     public static enum SoilSealingSubIndexType {
         
+        VOID("", ""),
         URBAN_AREA("a", "Urban Area"),
         HIGHEST_POLYGON_RATIO("b", "Highest Polygon Ratio"),
         OTHER_POLYGONS_RATIO("c", "Other Polygons Ratio");
@@ -169,13 +171,15 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         }
         
         public static SoilSealingSubIndexType translate(String abbr) {
-            for (SoilSealingSubIndexType value : SoilSealingSubIndexType.values()) {
-                if (abbr == value.getAbbreviation()) {
-                    return value;
+            if (abbr != null) {
+                for (SoilSealingSubIndexType value : SoilSealingSubIndexType.values()) {
+                    if (value != null && abbr.equals(value.getAbbreviation())) {
+                        return value;
+                    }
                 }
             }
             
-            return null;
+            return VOID;
         }
     }
     
@@ -447,7 +451,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
             attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
             attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
-            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? SoilSealingSubIndexType.translate(subIndex).getDescription() : "")));
+            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? SoilSealingSubIndexType.translate(subIndex).getDescription() : subIndex) : "")));
             attributes.add(new FeatureAttribute("classes", ""));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));

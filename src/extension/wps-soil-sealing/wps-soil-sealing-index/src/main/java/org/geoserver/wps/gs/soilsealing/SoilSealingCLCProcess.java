@@ -359,7 +359,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
             attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
             attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
-            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? SoilSealingSubIndexType.translate(subIndex).getDescription() : "")));
+            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? SoilSealingSubIndexType.translate(subIndex).getDescription() : subIndex) : "")));
             attributes.add(new FeatureAttribute("classes", (classes != null ? Arrays.toString(classes.toArray(new Integer[1])) : "")));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));

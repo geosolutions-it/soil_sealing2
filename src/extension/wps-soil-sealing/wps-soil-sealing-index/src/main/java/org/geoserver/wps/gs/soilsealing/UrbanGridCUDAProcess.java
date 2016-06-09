@@ -48,6 +48,8 @@ import org.geotools.factory.GeoTools;
 import org.geotools.factory.Hints;
 import org.geotools.gce.geotiff.GeoTiffFormat;
 import org.geotools.gce.geotiff.GeoTiffWriter;
+import org.geotools.geometry.Envelope2D;
+import org.geotools.geometry.GeneralEnvelope;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.image.ImageWorker;
 import org.geotools.process.ProcessException;
@@ -66,6 +68,7 @@ import org.opengis.metadata.spatial.PixelOrientation;
 import org.opengis.parameter.GeneralParameterValue;
 import org.opengis.parameter.ParameterValueGroup;
 import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.NoSuchAuthorityCodeException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
@@ -161,6 +164,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case URBAN_DISPERSION:
         case EDGE_DENSITY:
         case DISPERSIVE_URBAN_GROWTH:
+        case FRAGMENTATION:
         case MODEL_URBAN_DEVELOPMENT:
         case NEW_URBANIZATION:
             if (!subIndexA) {
@@ -201,7 +205,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
          * Geometry transform = JTS.transform(geo, tr); transform.setUserData(refCRS); geoms.set(i, transform); } } } catch (Exception e) {
          * LOGGER.log(Level.SEVERE, e.getMessage(), e); throw new ProcessException(e); } // Otherwise only set the correct User_Data parameter } else
          * if (inRasterSpace){
-         */ int geosize = geoms.size();
+         */ 
+        int geosize = geoms.size();
         final CoordinateReferenceSystem refCrs = referenceCoverage.getCoordinateReferenceSystem();
         for (int i = 0; i < geosize; i++) {
             Geometry geo = geoms.get(i);
@@ -230,35 +235,38 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
-            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius
-                    : 0);
+            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
                 bean.setAreaPix(areaPx);
 
                 // Populate it with Reference coverage parameters
-                populateBean(bean, true, referenceCoverage, geo, null, buffer);
+                try {
+                    populateBean(bean, true, referenceCoverage, geo, null, buffer);
 
-                // Set the population values if needed
-                if (populations != null) {
-                    Integer popRef = populations.get(0).get(counter);
-                    bean.setPopRef(popRef);
-                }
-
-                // Do the same for the Current Coverage if present
-                if (nowCoverage != null) {
-                    populateBean(bean, false, nowCoverage, geo, null, buffer);
                     // Set the population values if needed
                     if (populations != null) {
-                        Integer popCur = populations.get(1).get(counter);
-                        bean.setPopCur(popCur);
+                        Integer popRef = populations.get(0).get(counter);
+                        bean.setPopRef(popRef);
                     }
+    
+                    // Do the same for the Current Coverage if present
+                    if (nowCoverage != null) {
+                        populateBean(bean, false, nowCoverage, geo, null, buffer);
+                        // Set the population values if needed
+                        if (populations != null) {
+                            Integer popCur = populations.get(1).get(counter);
+                            bean.setPopCur(popCur);
+                        }
+                    }
+                    // Add the bean to the list
+                    beans.add(bean);
+                    // Update counter
+                    counter++;
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, geo.toText(), e);
                 }
-                // Add the bean to the list
-                beans.add(bean);
-                // Update counter
-                counter++;
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
@@ -275,8 +283,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             output = calculateCUDAIndex(soilSealingIndexType, subId, beans, rural, radius);
         } catch (FileNotFoundException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
         // long estimatedTime = System.currentTimeMillis() - startTime;
         // System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
@@ -657,6 +664,29 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
 
         // 1) Crop the two coverages with the selected Geometry
+        Envelope2D destinationEnvelope = null;
+        try {
+            final CoordinateReferenceSystem geometryCrs = CRS.decode("EPSG:"+geo.getSRID());
+            transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
+            geo = JTS.transform(geo, transform);
+            destinationEnvelope = JTS.getEnvelope2D(geo.getEnvelopeInternal(), geometryCrs);
+        } catch (FactoryException e) {
+            LOGGER.log(Level.SEVERE, "Selected Geometries cannot be reprojected to the source data SRS!", e);
+            throw new RuntimeException("Selected Geometries cannot be reprojected to the source data SRS!", e);
+        }
+        
+        // //
+        // Check the intersection
+        // //
+        final GeneralEnvelope intersectionEnvelope = new GeneralEnvelope(coverage.getEnvelope());
+        intersectionEnvelope.setCoordinateReferenceSystem(coverage.getCoordinateReferenceSystem());
+        // intersect the envelopes
+        intersectionEnvelope.intersect(destinationEnvelope);
+        if (intersectionEnvelope.isEmpty()) {
+            LOGGER.severe("Selected Geometries do not intersect the source data!");
+            throw new RuntimeException("Selected Geometries do not intersect the source data!");
+        }
+        
         GridCoverage2D crop = CROP.execute(coverage, geo, null);
         transform = ProjectiveTransform.create(
                 (AffineTransform) crop.getGridGeometry().getGridToCRS(PixelInCell.CELL_CORNER))
@@ -765,6 +795,10 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         final SampleModel sm = new PixelInterleavedSampleModel(DataBuffer.TYPE_DOUBLE, rect.width,
                 rect.height, 1, rect.width, new int[] { 0 });
         // DataBuffer containing input data
+        if(data.length == 1 && Double.isNaN(data[0])) {
+            LOGGER.severe("The index did not produce any ouput on the selected area!");
+            throw new RuntimeException("The index did not produce any ouput on the selected area!");
+        }
         final DataBufferDouble db1 = new DataBufferDouble(data, rect.width * rect.height);
         // Writable Raster used for creating the BufferedImage
         final WritableRaster wr = com.sun.media.jai.codecimpl.util.RasterFactory

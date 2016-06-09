@@ -427,10 +427,10 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
                 refValues[i] = (statContainer.getResultsRef() != null
-                        ? statContainer.getResultsRef() : new double[1]);
+                        ? statContainer.getResultsRef() : null);
                 if (nowFilter != null)
                     curValues[i] = (statContainer.getResultsNow() != null
-                            ? statContainer.getResultsNow() : new double[1]);
+                            ? statContainer.getResultsNow() : null);
                 i++;
             }
 
@@ -452,7 +452,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                     soilSealingRefTimeOutput);
             soilSealingIndexResult.setRefTime(soilSealingRefTime);
 
-            if (nowFilter != null) {
+            if (nowFilter != null && isValid(curValues, indexValue)) {
                 SoilSealingOutput soilSealingCurTimeOutput = new SoilSealingOutput(referenceName,
                         (String[]) municipalities.toArray(new String[1]), clcLevels, curValues,
                         statsComplex);
@@ -545,6 +545,29 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
         }
     }
 
+    /**
+     * 
+     * @param refValues
+     * @param indexValue
+     * @return
+     */
+    @SuppressWarnings("unused")
+    private boolean isValid(double[][] refValues, List<StatisticContainer> indexValue) {
+        int i = 0;
+        for (StatisticContainer statContainer : indexValue) {
+            if(refValues[i] ==  null) {
+                return false;
+            }
+            i++;
+        }
+        return true;
+    }
+
+    /**
+     * 
+     * @param rasters
+     * @return
+     */
     private String asCommaSeparatedList(String[] rasters) {
         StringBuilder sb = new StringBuilder();
         for (String st : rasters) {

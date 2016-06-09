@@ -68,7 +68,6 @@ import org.opengis.metadata.spatial.PixelOrientation;
 import org.opengis.parameter.GeneralParameterValue;
 import org.opengis.parameter.ParameterValueGroup;
 import org.opengis.referencing.FactoryException;
-import org.opengis.referencing.NoSuchAuthorityCodeException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
@@ -666,9 +665,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         // 1) Crop the two coverages with the selected Geometry
         Envelope2D destinationEnvelope = null;
         try {
-            final CoordinateReferenceSystem geometryCrs = CRS.decode("EPSG:"+geo.getSRID());
-            transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
-            geo = JTS.transform(geo, transform);
+            CoordinateReferenceSystem geometryCrs = coverage.getCoordinateReferenceSystem();
+            if (geo.getSRID() > 0) {
+                geometryCrs = CRS.decode("EPSG:"+geo.getSRID());
+                transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
+                geo = JTS.transform(geo, transform);
+            }
             destinationEnvelope = JTS.getEnvelope2D(geo.getEnvelopeInternal(), geometryCrs);
         } catch (FactoryException e) {
             LOGGER.log(Level.SEVERE, "Selected Geometries cannot be reprojected to the source data SRS!", e);

@@ -533,14 +533,11 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
-                refValues[i] = (statContainer.getResultsRef() != null ? statContainer.getResultsRef() : new double[1]);
-
-                if (nowFilter != null) {
-                    curValues[i] = (statContainer.getResultsNow() != null ? statContainer.getResultsNow() : new double[1]);
-                }
-
-                complexValues[i] = (statContainer.getResultsComplex() != null ? statContainer.getResultsComplex() : new double[1][1]);
-
+                refValues[i] = (statContainer.getResultsRef() != null
+                        ? statContainer.getResultsRef() : null);
+                if (nowFilter != null)
+                    curValues[i] = (statContainer.getResultsNow() != null
+                            ? statContainer.getResultsNow() : null);
                 i++;
             }
 
@@ -550,6 +547,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             curValues = cleanUpValues(curValues);
 
             String[] clcLevels = null;
+            
             SoilSealingOutput soilSealingRefTimeOutput = new SoilSealingOutput(referenceName,
                     (String[]) municipalities.toArray(new String[1]), clcLevels, refValues,
                     complexValues);
@@ -560,7 +558,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             LOGGER.fine(++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()));
 
-            if (nowFilter != null) {
+            if (nowFilter != null && isValid(curValues, indexValue)) {
                 SoilSealingOutput soilSealingCurTimeOutput = new SoilSealingOutput(referenceName,
                         (String[]) municipalities.toArray(new String[1]), clcLevels, curValues,
                         complexValues);
@@ -655,6 +653,29 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         }
     }
 
+    /**
+     * 
+     * @param refValues
+     * @param indexValue
+     * @return
+     */
+    @SuppressWarnings("unused")
+    private boolean isValid(double[][] refValues, List<StatisticContainer> indexValue) {
+        int i = 0;
+        for (StatisticContainer statContainer : indexValue) {
+            if(refValues[i] ==  null) {
+                return false;
+            }
+            i++;
+        }
+        return true;
+    }
+    
+    /**
+     * 
+     * @param rasters
+     * @return
+     */
     private String asCommaSeparatedList(String[] rasters) {
         StringBuilder sb = new StringBuilder();
         for (String st : rasters) {
@@ -727,7 +748,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 .setLayerName(refWsName + ":" + reference.getName().toString());
 
         // Importing of the current and difference coverages if present
-        if (now != null) {
+        if (now != null && soilSealingIndexResult.getCurTime() != null && soilSealingIndexResult.getCurTime().getOutput() != null) {
             // Current coverage
             importProcess.execute(null, now, refWsName, null, now.getName().toString(),
                     now.getCoordinateReferenceSystem(), null, defaultStyle);

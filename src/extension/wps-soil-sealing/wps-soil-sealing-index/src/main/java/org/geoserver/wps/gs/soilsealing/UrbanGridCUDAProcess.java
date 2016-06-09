@@ -136,10 +136,11 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         boolean subIndexA = !nullSubId && subId == SoilSealingSubIndexType.URBAN_AREA;
         boolean subIndexC = !nullSubId && subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO;
         boolean subIndexB = !nullSubId && subId == SoilSealingSubIndexType.OTHER_POLYGONS_RATIO;
-        
+
         if (soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH
                 && (nullSubId || !(subIndexA || subIndexB || subIndexC))) {
-            throw new IllegalArgumentException("Wrong subindex for index 7 [" + soilSealingIndexType + "]");
+            throw new IllegalArgumentException(
+                    "Wrong subindex for index 7 [" + soilSealingIndexType + "]");
         }
         // Check if almost one coverage is present
         if (referenceCoverage == null && nowCoverage == null) {
@@ -157,17 +158,17 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         boolean inRasterSpace = true;
         // Selection of the operation to do for each index
         switch (soilSealingIndexType) {
-            case URBAN_DISPERSION:
-            case EDGE_DENSITY:
-            case DISPERSIVE_URBAN_GROWTH:
-            case MODEL_URBAN_DEVELOPMENT:
-            case NEW_URBANIZATION:
-                if (!subIndexA) {
-                    inRasterSpace = false;
-                }
-                break;
-            default:
-                break;
+        case URBAN_DISPERSION:
+        case EDGE_DENSITY:
+        case DISPERSIVE_URBAN_GROWTH:
+        case MODEL_URBAN_DEVELOPMENT:
+        case NEW_URBANIZATION:
+            if (!subIndexA) {
+                inRasterSpace = false;
+            }
+            break;
+        default:
+            break;
         }
 
         // If the index is 7a-8-9-10 then the input Geometries must be transformed to the Model Space
@@ -229,7 +230,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
-            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0);
+            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius
+                    : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
@@ -278,12 +280,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         }
         // long estimatedTime = System.currentTimeMillis() - startTime;
         // System.out.println("Elapsed time calculateCUDAIndex()\t--> " + estimatedTime + " [ms]");
-        Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage()).getBounds();
+        Rectangle refRect = PlanarImage.wrapRenderedImage(referenceCoverage.getRenderedImage())
+                .getBounds();
 
         // For index 8 calculate the final Image
-        if (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
-            soilSealingIndexType == SoilSealingIndexType.LAND_TAKE || 
-            soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
+        if (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
+                || soilSealingIndexType == SoilSealingIndexType.LAND_TAKE
+                || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
 
             LOGGER.fine("rural=" + rural + " -- radius/buffer=" + radius + " [m]");
 
@@ -317,8 +320,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
 
             // Mosaic of the images
-            double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
-                    ? new double[] { -1.0 } : new double[] { 0.0 });
+            double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
+                    || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+                            ? new double[] { -1.0 } : new double[] { 0.0 });
             RenderedImage finalRef = MosaicDescriptor.create(refImgs,
                     MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null, background, hints);
 
@@ -394,8 +398,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @throws IOException
      */
     @SuppressWarnings("static-access")
-    private Object calculateCUDAIndex(SoilSealingIndexType soilSealingIndexType, SoilSealingSubIndexType subId, List<CUDABean> beans, boolean rural,
-            int ray_meters) throws IOException {
+    private Object calculateCUDAIndex(SoilSealingIndexType soilSealingIndexType,
+            SoilSealingSubIndexType subId, List<CUDABean> beans, boolean rural, int ray_meters)
+            throws IOException {
         /*
          * NOTES: (1) I don't like numeric index, because we might change order (or whatever). A string index might be more general. (2) We need to
          * define how to pass the correct year when 1 year (ref or curr) is selected from within the MapStore GUI. I think that one solution could be
@@ -433,10 +438,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 int WIDTH = beans.get(0).width;
                 int HEIGHT = beans.get(0).height;
                 // ROI
-                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi, DataBuffer.TYPE_BYTE, "ssgci_roi");
-                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(), DataBuffer.TYPE_BYTE, "ssgci_bin");
+                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi,
+                        DataBuffer.TYPE_BYTE, "ssgci_roi");
+                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(),
+                        DataBuffer.TYPE_BYTE, "ssgci_bin");
                 if (n_years > 1)
-                    storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(), DataBuffer.TYPE_BYTE, "ssgci_bin2");
+                    storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(),
+                            DataBuffer.TYPE_BYTE, "ssgci_bin2");
             } catch (IOException e) {
                 LOGGER.log(Level.WARNING, "Could not save GeoTIFF Sample for testing", e);
             }
@@ -490,7 +498,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             return result;
 
         case EDGE_DENSITY: // edge density [perimeter]
-                // loop for each administrative unit
+            // loop for each administrative unit
             for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
                 // number of grids per admin_unit to give in output:
                 for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
@@ -505,7 +513,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             return result;
 
         case DISPERSIVE_URBAN_GROWTH: // urban diffusion
-                // loop for each administrative unit
+            // loop for each administrative unit
             for (int j = 0; j < n_adm_units; j++) { // lauch for administrative units
                 // number of grids per admin_unit to give in output:
                 for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
@@ -514,7 +522,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     if (isFeasible) {
                         if (subId == SoilSealingSubIndexType.URBAN_AREA) { // urban_area [reduction]* --> a modification from original occurred!
                             result[j][i][0] = cuda.urban_area(beans, areaPix, i, j);
-                        } else if (subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO) { // area of polygon with maximum extension [ccl+ave(hist(~polyMax))]
+                        } else if (subId == SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO) { // area of polygon with maximum extension
+                                                                                             // [ccl+ave(hist(~polyMax))]
                             result[j][i][0] = cuda.highest_polygon_ratio(beans, areaPix, i, j);
                         } else if (subId == SoilSealingSubIndexType.OTHER_POLYGONS_RATIO) { // average area of other polygons [ccl+hist]
                             result[j][i][0] = cuda.others_polygons_avesurf(beans, areaPix, i, j);

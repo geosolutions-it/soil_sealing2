@@ -32,12 +32,12 @@ import org.opengis.referencing.datum.PixelInCell;
 import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 
-import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.PrecisionModel;
 import com.vividsolutions.jts.simplify.DouglasPeuckerSimplifier;
 
+@SuppressWarnings("deprecation")
 public abstract class SoilSealingMiddlewareProcess implements GSProcess {
 
     /**
@@ -111,85 +111,89 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 int referencePopulation = 0;
                 int currentPopulation = 0;
                 switch (sAu.getType()) {
-                case MUNICIPALITY :
-                    boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
-                            gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
-                    if(hasPop){
-                    	municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                    }
-                    break;
-                case DISTRICT:
-                    for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                    {
-                        if (roi == null) {
-                                roi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
-                                srID = roi.getSRID();
-                            }
-                        else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
-                        if (ssAu.getPopulation() != null) {
-                            if (ssAu.getPopulation().get(referenceYear) != null) referencePopulation += ssAu.getPopulation().get(referenceYear);
-                            if (nowFilter != null && ssAu.getPopulation().get(currentYear) != null) currentPopulation += ssAu.getPopulation().get(currentYear);
+                    case MUNICIPALITY :
+                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+                                gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
+                        if(hasPop){
+                        	municipalities.add(sAu.getName() + " - " + sAu.getParent());
                         }
-                    }
-                    roi.setSRID(srID);
-                    rois.add(roi);
-                    populations.get(0).add(referencePopulation);
-                    if (nowFilter != null) populations.get(1).add(currentPopulation);
-                    municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                    break;
-                case REGION:
-                    for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                    {
-                        for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
-                            if (roi == null){
-                                roi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
-                                srID = roi.getSRID();
-                            }
-                            else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
-                            if (sssAu.getPopulation() != null) {
-                                if (sssAu.getPopulation().get(referenceYear) != null) referencePopulation += sssAu.getPopulation().get(referenceYear);
-                                if (nowFilter != null && sssAu.getPopulation().get(currentYear) != null) currentPopulation += sssAu.getPopulation().get(currentYear);
+                        break;
+                    case DISTRICT:
+                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                        {
+                            if (roi == null) {
+                                    roi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                                    srID = roi.getSRID();
+                                }
+                            else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
+                            if (ssAu.getPopulation() != null) {
+                                if (ssAu.getPopulation().get(referenceYear) != null) referencePopulation += ssAu.getPopulation().get(referenceYear);
+                                if (nowFilter != null && ssAu.getPopulation().get(currentYear) != null) currentPopulation += ssAu.getPopulation().get(currentYear);
                             }
                         }
-                    }
-                    roi.setSRID(srID);
-                    rois.add(roi);
-                    populations.get(0).add(referencePopulation);
-                    if (nowFilter != null) populations.get(1).add(currentPopulation);
-                    municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                    break;
+                        roi.setSRID(srID);
+                        rois.add(roi);
+                        populations.get(0).add(referencePopulation);
+                        if (nowFilter != null) populations.get(1).add(currentPopulation);
+                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                        break;
+                    case REGION:
+                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                        {
+                            for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
+                                if (roi == null){
+                                    roi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                                    srID = roi.getSRID();
+                                }
+                                else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
+                                if (sssAu.getPopulation() != null) {
+                                    if (sssAu.getPopulation().get(referenceYear) != null) referencePopulation += sssAu.getPopulation().get(referenceYear);
+                                    if (nowFilter != null && sssAu.getPopulation().get(currentYear) != null) currentPopulation += sssAu.getPopulation().get(currentYear);
+                                }
+                            }
+                        }
+                        roi.setSRID(srID);
+                        rois.add(roi);
+                        populations.get(0).add(referencePopulation);
+                        if (nowFilter != null) populations.get(1).add(currentPopulation);
+                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                        break;
+                    default:
+                        break;
                 }
             } else if (admUnitSelectionType == AuSelectionType.AU_SUBS) {
                 switch (sAu.getType()) {
-                case MUNICIPALITY :
-                    boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
-                    if(hasPop){
-                    	municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                    }
-                    //municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                    break;
-                case DISTRICT:
-                    for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                    {
-                        hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, ssAu, toRasterSpace);
+                    case MUNICIPALITY :
+                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
                         if(hasPop){
-                        	municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
+                        	municipalities.add(sAu.getName() + " - " + sAu.getParent());
                         }
-                        //municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
-                    }
-                    break;
-                case REGION:
-                    for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                    {
-                        for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
-                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sssAu, toRasterSpace);
+                        //municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                        break;
+                    case DISTRICT:
+                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                        {
+                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, ssAu, toRasterSpace);
                             if(hasPop){
-                            	municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
+                            	municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
                             }
-                            //municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
+                            //municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
                         }
-                    }
-                    break;
+                        break;
+                    case REGION:
+                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                        {
+                            for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
+                                hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sssAu, toRasterSpace);
+                                if(hasPop){
+                                	municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
+                                }
+                                //municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
+                            }
+                        }
+                        break;
+                    default:
+                        break;
                 }
             }
         }
@@ -301,8 +305,9 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @throws Exception
      */
     protected GridGeometry2D createGridROI(CoverageInfo ciReference, List<Geometry> rois,
-            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs, final Double buffer, boolean mergeGeometries) 
-                    throws TransformException, FactoryException, Exception {
+            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs,
+            final Double buffer, boolean mergeGeometries)
+            throws TransformException, FactoryException, Exception {
         // Creation of a Geometry union for cropping the input coverages
         Geometry union = null;
         Geometry roiUnion = null;
@@ -330,46 +335,47 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     union = union.union(geo);
                 }
             }
-            
+
             if (roiUnion == null) {
-            	roiUnion = geo;
+                roiUnion = geo;
             } else {
-            	roiUnion = roiUnion.union(geo);
+                roiUnion = roiUnion.union(geo);
             }
         }
 
         if (mergeGeometries && !roiUnion.isEmpty()) {
             com.vividsolutions.jts.geom.Envelope envelope = roiUnion.getEnvelopeInternal();
-            
-            if (buffer != null && buffer > 0) {
-	        	if (!"EPSG:4326".equals(ciReference.getSRS())) {
-	        		envelope.expandBy(buffer);
-	            	roiBuffer = roiUnion.buffer(buffer);
-	        	} else {
-	        		envelope.expandBy(buffer / 111.128);
-	        		roiBuffer = roiUnion.buffer(buffer / 111.128);
-	        	}
 
-	        	if (union == null) {
-	                if (toRasterSpace) {
-	                    union = JTS.transform(roiBuffer, ProjectiveTransform.create(gridToWorldCorner));
-	                } else {
-	                    union = roiBuffer;
-	                }
-	            } else {
-	                if (toRasterSpace) {
-	                    Geometry projected = JTS.transform(roiBuffer,
-	                            ProjectiveTransform.create(gridToWorldCorner));
-	                    union = union.union(projected);
-	                } else {
-	                    union = union.union(roiBuffer);
-	                }
-	            }
+            if (buffer != null && buffer > 0) {
+                if (!"EPSG:4326".equals(ciReference.getSRS())) {
+                    envelope.expandBy(buffer);
+                    roiBuffer = roiUnion.buffer(buffer);
+                } else {
+                    envelope.expandBy(buffer / 111.128);
+                    roiBuffer = roiUnion.buffer(buffer / 111.128);
+                }
+
+                if (union == null) {
+                    if (toRasterSpace) {
+                        union = JTS.transform(roiBuffer,
+                                ProjectiveTransform.create(gridToWorldCorner));
+                    } else {
+                        union = roiBuffer;
+                    }
+                } else {
+                    if (toRasterSpace) {
+                        Geometry projected = JTS.transform(roiBuffer,
+                                ProjectiveTransform.create(gridToWorldCorner));
+                        union = union.union(projected);
+                    } else {
+                        union = union.union(roiBuffer);
+                    }
+                }
             }
-            
-        	rois.clear();
-        	rois.add(roiUnion);
-        }        
+
+            rois.clear();
+            rois.add(roiUnion);
+        }
 
         // Setting of the final srID and reproject to the final CRS
         CoordinateReferenceSystem crs = (CoordinateReferenceSystem) union.getUserData();
@@ -389,9 +395,9 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
         }
 
         GridGeometry2D gridROI = null;
-        
+
         if (!union.isEmpty()) {
-            
+
             //
             // Make sure the provided area intersects the layer BBOX in the layer CRS
             //
@@ -402,17 +408,17 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                         "The provided Administrative Areas does not intersect the reference data BBOX: ",
                         union.toText());
             }
-            
+
             com.vividsolutions.jts.geom.Envelope envelope = union.getEnvelopeInternal();
-                        
+
             // create with supplied crs
             Envelope2D bounds = JTS.getEnvelope2D(envelope, covCRS);
 
             // Creation of a GridGeometry2D instance used for cropping the input images
-            gridROI = new GridGeometry2D(PixelInCell.CELL_CORNER,
-                    (MathTransform) gridToWorldCorner, bounds, null);
+            gridROI = new GridGeometry2D(PixelInCell.CELL_CORNER, (MathTransform) gridToWorldCorner,
+                    bounds, null);
         }
-        
+
         return gridROI;
     }
 }

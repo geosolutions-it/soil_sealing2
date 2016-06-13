@@ -374,12 +374,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         } else {
             double[][][] values = (double[][][]) output;
             statsRef = new double[values.length];
-            statsNow = (values[0][0].length > 1 ? new double[values.length] : null);
+            statsNow = (values[0].length > 1 && values[0][1] != null? new double[values.length] : null);
 
             for (int v = 0; v < values.length; v++) {
                 statsRef[v] = values[v][0][0];
-                if (values[v][0].length > 1) {
-                    statsNow[v] = values[v][0][1];
+                if (statsNow != null) {
+                    statsNow[v] = values[v][1][0];
                 }
             }
         }
@@ -585,7 +585,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             for (int j = 0; j < n_adm_units; j++) {
                 // rearrange to fit the middleware process and GUI code requirements
                 result[j][0] = new double[1];
-                result[j][0][0] = CUDAClass.potloss_foodsupply(beans, j);
+                result[j][0][0] = Math.round(CUDAClass.potloss_foodsupply(beans, j));
             }
             return result;
         case MODEL_URBAN_DEVELOPMENT:

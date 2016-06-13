@@ -422,12 +422,14 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
 
             double[][] refValues = new double[indexValue.size()][];
             double[][] curValues = (nowFilter == null ? null : new double[indexValue.size()][]);
-            double[][][] statsComplex = null;
+            double[][][] statsComplex = new double[indexValue.size()][][];
 
             int i = 0;
             for (StatisticContainer statContainer : indexValue) {
                 refValues[i] = (statContainer.getResultsRef() != null
                         ? statContainer.getResultsRef() : null);
+                statsComplex[i] = statContainer.getResultsComplex();
+                
                 if (nowFilter != null)
                     curValues[i] = (statContainer.getResultsNow() != null
                             ? statContainer.getResultsNow() : null);
@@ -547,15 +549,17 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
 
     /**
      * 
-     * @param refValues
+     * @param simpleValues
      * @param indexValue
      * @return
      */
-    @SuppressWarnings("unused")
-    private boolean isValid(double[][] refValues, List<StatisticContainer> indexValue) {
+    private boolean isValid(double[][] simpleValues, List<StatisticContainer> indexValue) {
         int i = 0;
         for (StatisticContainer statContainer : indexValue) {
-            if(refValues[i] ==  null) {
+            if(simpleValues[i] ==  null && 
+               statContainer.getResultsComplex() == null && 
+               statContainer.getReferenceImage() == null &&
+               statContainer.getNowImage() == null) {
                 return false;
             }
             i++;

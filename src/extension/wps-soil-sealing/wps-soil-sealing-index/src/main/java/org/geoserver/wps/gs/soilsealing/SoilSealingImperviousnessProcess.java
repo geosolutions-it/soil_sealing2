@@ -451,7 +451,12 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
             attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
             attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
-            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? SoilSealingSubIndexType.translate(subIndex).getDescription() : subIndex) : "")));
+            attributes.add(new FeatureAttribute("subindex", 
+                    (subIndex != null ? 
+                            (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
+                                    SoilSealingSubIndexType.translate(subIndex).getDescription() + (radius>0?","+radius+"m":"") : 
+                                    subIndex + (radius>0?","+radius+"m":"")) : 
+                            "")));
             attributes.add(new FeatureAttribute("classes", ""));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
@@ -657,15 +662,17 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
     /**
      * 
-     * @param refValues
+     * @param simpleValues
      * @param indexValue
      * @return
      */
-    @SuppressWarnings("unused")
-    private boolean isValid(double[][] refValues, List<StatisticContainer> indexValue) {
+    private boolean isValid(double[][] simpleValues, List<StatisticContainer> indexValue) {
         int i = 0;
         for (StatisticContainer statContainer : indexValue) {
-            if(refValues[i] ==  null) {
+            if(simpleValues[i] ==  null && 
+               statContainer.getResultsComplex() == null && 
+               statContainer.getReferenceImage() == null &&
+               statContainer.getNowImage() == null) {
                 return false;
             }
             i++;

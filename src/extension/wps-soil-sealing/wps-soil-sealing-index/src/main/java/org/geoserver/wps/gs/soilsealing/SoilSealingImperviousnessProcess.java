@@ -535,6 +535,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             for (StatisticContainer statContainer : indexValue) {
                 refValues[i] = (statContainer.getResultsRef() != null
                         ? statContainer.getResultsRef() : null);
+                complexValues[i] = statContainer.getResultsComplex();
+                
                 if (nowFilter != null)
                     curValues[i] = (statContainer.getResultsNow() != null
                             ? statContainer.getResultsNow() : null);

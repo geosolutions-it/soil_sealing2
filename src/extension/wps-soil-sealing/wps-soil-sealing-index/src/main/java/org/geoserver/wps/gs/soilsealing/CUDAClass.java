@@ -655,7 +655,7 @@ public class CUDAClass {
 				 */
 				int selDev = getRandomGpuDevice(deviceCount);
 
-				System.out.println(" - GPU Device: ["+selDev+"] / ["+deviceCount+"]");
+				System.out.println(" - GPU Device: ["+(selDev+1)+"] / ["+deviceCount+"]");
 
 				CUdevice device = new CUdevice();
 				cuDeviceGet(device, selDev);
@@ -2892,7 +2892,6 @@ public class CUDAClass {
 
 	public static int getRandomGpuDevice(int deviceCount) {
 		Random rn = new Random();
-		
 		return rn.nextInt(deviceCount);
 	}
 	

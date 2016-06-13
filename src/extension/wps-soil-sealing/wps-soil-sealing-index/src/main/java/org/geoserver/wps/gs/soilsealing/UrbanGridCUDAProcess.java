@@ -166,9 +166,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case FRAGMENTATION:
         case MODEL_URBAN_DEVELOPMENT:
         case NEW_URBANIZATION:
-            if (!subIndexA) {
+            //if (!subIndexA) {
                 inRasterSpace = false;
-            }
+            //}
             break;
         default:
             break;

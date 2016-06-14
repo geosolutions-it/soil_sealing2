@@ -22,6 +22,7 @@ import javax.media.jai.RenderedOp;
 
 import net.sf.json.JSONSerializer;
 
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
@@ -501,7 +502,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         nowCoverage, 
                         SoilSealingIndexType.translateIndex(index),
                         SoilSealingSubIndexType.translate(subIndex), 
-                        pixelSize, 
+                        Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
                         (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
@@ -513,7 +514,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         nowCoverage, 
                         SoilSealingIndexType.translateIndex(index), 
                         SoilSealingSubIndexType.translate(subIndex), 
-                        pixelSize, 
+                        Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
                         (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
@@ -637,7 +638,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 // build the feature
                 feature.setAttribute("runEnd", new Date());
                 feature.setAttribute("itemStatus", "FAILED");
-                feature.setAttribute("itemStatusMessage", "There was an error while while processing Input parameters: " + e.getLocalizedMessage());
+                feature.setAttribute("itemStatusMessage", ExceptionUtils.getStackTrace(e));
 
                 ListFeatureCollection output = new ListFeatureCollection(features.getSchema());
                 output.add(feature);

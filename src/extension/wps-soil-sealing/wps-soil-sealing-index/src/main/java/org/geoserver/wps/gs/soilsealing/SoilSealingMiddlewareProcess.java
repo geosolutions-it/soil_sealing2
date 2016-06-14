@@ -40,6 +40,7 @@ import com.vividsolutions.jts.simplify.DouglasPeuckerSimplifier;
 @SuppressWarnings("deprecation")
 public abstract class SoilSealingMiddlewareProcess implements GSProcess {
 
+    public static final int DEGREES_TO_METER_RATIO = 111128;
     /**
      * Geometry and Filter Factories
      */
@@ -351,8 +352,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     envelope.expandBy(buffer);
                     roiBuffer = roiUnion.buffer(buffer);
                 } else {
-                    envelope.expandBy(buffer / 111.128);
-                    roiBuffer = roiUnion.buffer(buffer / 111.128);
+                    envelope.expandBy(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
+                    roiBuffer = roiUnion.buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
                 }
 
                 if (union == null) {

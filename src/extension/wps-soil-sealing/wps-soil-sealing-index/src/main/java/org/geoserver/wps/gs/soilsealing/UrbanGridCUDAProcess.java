@@ -625,6 +625,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     result[j][i] = new double[] { Double.NaN };
             }
             return result;
+        default:
+            break;
         }
         return null;
     }
@@ -655,7 +657,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                         CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
                     geo = geo.buffer(buffer);
                 } else {
-                    geo = geo.buffer(buffer / 111.128);
+                    geo = geo.buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
                 }
             } catch (FactoryException e) {
                 geo = geo.buffer(buffer);

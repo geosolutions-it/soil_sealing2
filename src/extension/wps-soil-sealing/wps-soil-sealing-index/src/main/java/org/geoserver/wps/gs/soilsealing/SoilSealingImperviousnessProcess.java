@@ -100,27 +100,30 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
      */
     public static enum SoilSealingIndexType {
 
-        VOID(-1, ""),
-        COVERAGE_COEFFICIENT(1, "Coverage coefficient"), 
-        RATE_OF_CHANGE(2, "Rate of Change"), 
-        MARGINAL_LAND_TAKE(3, "Marginal Land Take"), 
-        URBAN_SPRAWL(4, "Urban Sprawl Indicator"), 
-        URBAN_DISPERSION(5, "Urban Dispersion"), 
-        EDGE_DENSITY(6, "Edge Density"), 
-        DISPERSIVE_URBAN_GROWTH(7, "Dispersive Urban Growth"), 
-        FRAGMENTATION(8, "Fragmentation"), 
-        LAND_TAKE(9, "Land Take"), 
-        POTENTIAL_LOSS_FOOD_SUPPLY(10, "Potential Loss of Food Supply"), 
-        MODEL_URBAN_DEVELOPMENT(11, "Model of Urban Development"), 
-        NEW_URBANIZATION(12, "New Urbanization");
+        VOID(-1, "", ""),
+        COVERAGE_COEFFICIENT(1, "Coverage coefficient", "Coverage"), 
+        RATE_OF_CHANGE(2, "Rate of Change", "RateOfChange"), 
+        MARGINAL_LAND_TAKE(3, "Marginal Land Take", "MarginalLandTake"), 
+        URBAN_SPRAWL(4, "Urban Sprawl Indicator", "UrbanSprawl"), 
+        URBAN_DISPERSION(5, "Urban Dispersion", "UrbanDisp"), 
+        EDGE_DENSITY(6, "Edge Density", "EdgeDensity"), 
+        DISPERSIVE_URBAN_GROWTH(7, "Dispersive Urban Growth", "UrbanGrowth"), 
+        FRAGMENTATION(8, "Fragmentation", "Fragmentation"), 
+        LAND_TAKE(9, "Land Take", "LandTake"), 
+        POTENTIAL_LOSS_FOOD_SUPPLY(10, "Potential Loss of Food Supply", "LossFoodSupply"), 
+        MODEL_URBAN_DEVELOPMENT(11, "Model of Urban Development", "UrbanDevel"), 
+        NEW_URBANIZATION(12, "New Urbanization", "NewUrbaninzation");
 
         private Integer idx;
 
         private String descr;
+        
+        private String name;
 
-        SoilSealingIndexType(Integer idx, String descr) {
+        SoilSealingIndexType(Integer idx, String descr, String name) {
             this.idx = idx;
             this.descr = descr;
+            this.name = name;
         }
 
         public int getIdx() {
@@ -129,6 +132,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
         public String getDescription() {
             return this.descr;
+        }
+        
+        public String getName() {
+            return this.name;
         }
         
         public static SoilSealingIndexType translateIndex(int index) {

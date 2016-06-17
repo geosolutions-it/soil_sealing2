@@ -1,0 +1,473 @@
+diff --git a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingCLCProcess.java b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingCLCProcess.java
+index 7af26c5..dbee97c 100644
+--- a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingCLCProcess.java
++++ b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingCLCProcess.java
+@@ -166,6 +166,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
+         GridCoverage2D referenceCoverage = null;
+         List<String> municipalities = new LinkedList<String>();
+         List<Geometry> rois = new LinkedList<Geometry>();
++        List<Geometry> originalRois = new LinkedList<Geometry>();
+         List<List<Integer>> populations = new LinkedList<List<Integer>>();
+         populations.add(new LinkedList<Integer>());
+         if (nowFilter != null)
+@@ -195,8 +196,8 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
+             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
+             if (admUnits != null && !admUnits.isEmpty()) {
+                 prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+-                        geoCodingReference, populationReference, municipalities, rois, populations,
+-                        referenceYear, currentYear, referenceCrs, true);
++                        geoCodingReference, populationReference, municipalities, rois, originalRois, populations,
++                        referenceYear, currentYear, referenceCrs, true, 0d);
+             } else {
+                 populations = null;
+                 // handle Region Of Interest
+@@ -255,7 +256,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
+                     ImageMosaicFormat.USE_JAI_IMAGEREAD.getDefaultValue(),
+                     ImageMosaicFormat.USE_JAI_IMAGEREAD);
+ 
+-            GridGeometry2D gridROI = createGridROI(ciReference, rois, true, referenceCrs, null,
++            GridGeometry2D gridROI = createGridROI(ciReference, rois, rois, true, referenceCrs, null,
+                     false);
+ 
+             if (gridROI != null) {
+diff --git a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingImperviousnessProcess.java b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingImperviousnessProcess.java
+index a86e2a9..0c5191d 100644
+--- a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingImperviousnessProcess.java
++++ b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingImperviousnessProcess.java
+@@ -54,6 +54,7 @@ import org.geotools.process.ProcessException;
+ import org.geotools.process.factory.DescribeParameter;
+ import org.geotools.process.factory.DescribeProcess;
+ import org.geotools.process.factory.DescribeResult;
++import org.geotools.referencing.operation.transform.ProjectiveTransform;
+ import org.geotools.resources.image.ImageUtilities;
+ import org.geotools.util.NullProgressListener;
+ import org.geotools.util.logging.Logging;
+@@ -270,6 +271,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+         GridCoverage2D referenceCoverage = null;
+         List<String> municipalities = new LinkedList<String>();
+         List<Geometry> rois = new LinkedList<Geometry>();
++        List<Geometry> originalRois = new LinkedList<Geometry>();
+         List<List<Integer>> populations = new LinkedList<List<Integer>>();
+         populations.add(new LinkedList<Integer>());
+         if (nowFilter != null)
+@@ -322,11 +324,13 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+             /**
+              * Parse Geometries and Reproject to Reference CRS
+              */
++            final Double buffer = (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0.0);
++
+             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
+             if (admUnits != null && !admUnits.isEmpty()) {
+                 prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+-                        geoCodingReference, populationReference, municipalities, rois, populations,
+-                        referenceYear, currentYear, referenceCrs, toRasterSpace);
++                        geoCodingReference, populationReference, municipalities, rois, originalRois, populations,
++                        referenceYear, currentYear, referenceCrs, toRasterSpace, buffer);
+             } else {
+                 populations = null;
+                 // handle Region Of Interest
+@@ -362,9 +366,19 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+                     }
+                     final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
+                             .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
++                    
++                    // AF: Tentative
++                    Geometry originalRoi = (Geometry) roi.clone();
++                    if (buffer != null && buffer > 0) {
++                        roi = roi.buffer(buffer / 111128);
++                    }
+                     roi.setSRID(4326);
+                     roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
+                     rois.add(roi);
++                    
++                    originalRoi.setSRID(4326);
++                    originalRoi = toReferenceCRS(originalRoi, referenceCrs, gridToWorldCorner, toRasterSpace);
++                    originalRois.add(originalRoi);
+                 }
+             }
+ 
+@@ -386,7 +400,6 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+ 
+             // Creation of a GridGeometry object used for forcing the reader to
+             // read only the active zones
+-            final Double buffer = (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0.0);
+             final boolean mergeGeometries = 
+                     (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.URBAN_DISPERSION || 
+                      SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.EDGE_DENSITY || 
+@@ -394,7 +407,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+                      SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY || 
+                      SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT ? false : true);
+             
+-            final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer, mergeGeometries);
++            final GridGeometry2D gridROI = createGridROI(ciReference, rois, originalRois, toRasterSpace, referenceCrs, buffer, mergeGeometries);
+ 
+             if (gridROI != null) {
+                 params = CoverageUtilities.replaceParameter(params, gridROI,
+@@ -502,7 +515,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+                         SoilSealingIndexType.translateIndex(index),
+                         SoilSealingSubIndexType.translate(subIndex), 
+                         pixelSize, 
+-                        rois, 
++                        rois,
++                        originalRois,
+                         populations,
+                         (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+             } else {
+@@ -514,7 +528,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
+                         SoilSealingIndexType.translateIndex(index), 
+                         SoilSealingSubIndexType.translate(subIndex), 
+                         pixelSize, 
+-                        rois, 
++                        rois,
++                        originalRois,
+                         populations,
+                         (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+             }
+diff --git a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingMiddlewareProcess.java b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingMiddlewareProcess.java
+index 9092afc..5aa0f6c 100644
+--- a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingMiddlewareProcess.java
++++ b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/SoilSealingMiddlewareProcess.java
+@@ -79,10 +79,12 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+      * @param populationReference
+      * @param municipalities
+      * @param rois
++     * @param originalRois 
+      * @param populations
+      * @param referenceYear
+      * @param currentYear
+      * @param referenceCrs 
++     * @param buffer 
+      * @throws IOException
+      * @throws NoSuchAuthorityCodeException
+      * @throws FactoryException
+@@ -92,9 +94,9 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+     protected void prepareAdminROIs(Filter nowFilter, String admUnits,
+             AuSelectionType admUnitSelectionType, CoverageInfo ciReference,
+             FeatureTypeInfo geoCodingReference, FeatureTypeInfo populationReference,
+-            List<String> municipalities, List<Geometry> rois, List<List<Integer>> populations,
++            List<String> municipalities, List<Geometry> rois, List<Geometry> originalRois, List<List<Integer>> populations,
+             final String referenceYear, final String currentYear, 
+-            CoordinateReferenceSystem referenceCrs, boolean toRasterSpace) throws IOException,
++            CoordinateReferenceSystem referenceCrs, boolean toRasterSpace, Double buffer) throws IOException,
+             NoSuchAuthorityCodeException, FactoryException, TransformException,
+             NoninvertibleTransformException {
+         // extract administrative units and geometries
+@@ -107,13 +109,14 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+             SoilSealingAdministrativeUnit sAu = new SoilSealingAdministrativeUnit(au, geoCodingReference, populationReference);
+             if (admUnitSelectionType == AuSelectionType.AU_LIST) {
+                 Geometry roi = null;
++                Geometry originalRoi = null;
+                 int srID=0;
+                 int referencePopulation = 0;
+                 int currentPopulation = 0;
+                 switch (sAu.getType()) {
+                     case MUNICIPALITY :
+                         boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+-                                gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
++                                gridToWorldCorner, referenceCrs, rois, originalRois, populations, sAu, toRasterSpace, buffer);
+                         if(hasPop){
+                         	municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                         }
+@@ -131,8 +134,24 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+                                 if (nowFilter != null && ssAu.getPopulation().get(currentYear) != null) currentPopulation += ssAu.getPopulation().get(currentYear);
+                             }
+                         }
++                        /*roi.setSRID(srID);
++                        rois.add(roi);*/
++                        
++                     // AF: Tentative
++                        originalRoi = (Geometry) roi.clone();
++                        if (buffer != null && buffer > 0) {
++                            if (srID == 4326) {
++                                roi = roi.buffer(buffer / 111128);
++                            } else {
++                                roi = roi.buffer(buffer);
++                            }
++                        }
+                         roi.setSRID(srID);
+                         rois.add(roi);
++                        
++                        originalRoi.setSRID(srID);
++                        originalRois.add(originalRoi);
++                        
+                         populations.get(0).add(referencePopulation);
+                         if (nowFilter != null) populations.get(1).add(currentPopulation);
+                         municipalities.add(sAu.getName() + " - " + sAu.getParent());
+@@ -152,8 +171,24 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+                                 }
+                             }
+                         }
++                        /*roi.setSRID(srID);
++                        rois.add(roi);*/
++                        
++                        // AF: Tentative
++                        originalRoi = (Geometry) roi.clone();
++                        if (buffer != null && buffer > 0) {
++                            if (srID == 4326) {
++                                roi = roi.buffer(buffer / 111128);
++                            } else {
++                                roi = roi.buffer(buffer);
++                            }
++                        }
+                         roi.setSRID(srID);
+                         rois.add(roi);
++                        
++                        originalRoi.setSRID(srID);
++                        originalRois.add(originalRoi);
++                        
+                         populations.get(0).add(referencePopulation);
+                         if (nowFilter != null) populations.get(1).add(currentPopulation);
+                         municipalities.add(sAu.getName() + " - " + sAu.getParent());
+@@ -164,7 +199,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+             } else if (admUnitSelectionType == AuSelectionType.AU_SUBS) {
+                 switch (sAu.getType()) {
+                     case MUNICIPALITY :
+-                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
++                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, originalRois, populations, sAu, toRasterSpace, buffer);
+                         if(hasPop){
+                         	municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                         }
+@@ -173,7 +208,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+                     case DISTRICT:
+                         for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                         {
+-                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, ssAu, toRasterSpace);
++                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, originalRois, populations, ssAu, toRasterSpace, buffer);
+                             if(hasPop){
+                             	municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
+                             }
+@@ -184,7 +219,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+                         for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
+                         {
+                             for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
+-                                hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sssAu, toRasterSpace);
++                                hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, originalRois, populations, sssAu, toRasterSpace, buffer);
+                                 if(hasPop){
+                                 	municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
+                                 }
+@@ -229,9 +264,11 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+      * @param gridToWorldCorner
+      * @param referenceCrs
+      * @param rois
++     * @param originalRois 
+      * @param populations
+      * @param sAu
+      * @param toRasterSpace 
++     * @param buffer 
+      * @throws NoSuchAuthorityCodeException
+      * @throws FactoryException
+      * @throws TransformException
+@@ -240,8 +277,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+     protected boolean populateInputLists(Filter nowFilter, final String referenceYear,
+             final String currentYear, final AffineTransform gridToWorldCorner,
+             final CoordinateReferenceSystem referenceCrs, List<Geometry> rois,
+-            List<List<Integer>> populations, SoilSealingAdministrativeUnit sAu, 
+-            boolean toRasterSpace)
++            List<Geometry> originalRois, List<List<Integer>> populations, SoilSealingAdministrativeUnit sAu, 
++            boolean toRasterSpace, Double buffer)
+             throws NoSuchAuthorityCodeException, FactoryException, TransformException,
+             NoninvertibleTransformException {
+         boolean hasPop = true;
+@@ -252,7 +289,21 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+             else if(nowFilter != null){hasPop = false;}
+         }
+         if(hasPop){
+-        	rois.add(toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace));
++            Geometry roi = sAu.getTheGeom();
++            Geometry originalRoi = (Geometry) roi.clone();
++            
++         // AF: Tentative
++            originalRoi = (Geometry) roi.clone();
++            if (buffer != null && buffer > 0) {
++                if (originalRoi.getSRID() == 4326) {
++                    roi = roi.buffer(buffer / 111128);
++                } else {
++                    roi = roi.buffer(buffer);
++                }
++            }
++            
++            rois.add(toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace));
++            originalRois.add(toReferenceCRS(originalRoi, referenceCrs, gridToWorldCorner, toRasterSpace));
+         }
+         return hasPop;
+     }
+@@ -296,6 +347,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+      * 
+      * @param ciReference
+      * @param rois
++     * @param originalRois 
+      * @param toRasterSpace
+      * @param referenceCrs
+      * @param gridROI
+@@ -305,7 +357,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+      * @throws Exception
+      */
+     protected GridGeometry2D createGridROI(CoverageInfo ciReference, List<Geometry> rois,
+-            boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs,
++            List<Geometry> originalRois, boolean toRasterSpace, final CoordinateReferenceSystem referenceCrs,
+             final Double buffer, boolean mergeGeometries)
+             throws TransformException, FactoryException, Exception {
+         // Creation of a Geometry union for cropping the input coverages
+@@ -346,7 +398,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+         if (mergeGeometries && !roiUnion.isEmpty()) {
+             com.vividsolutions.jts.geom.Envelope envelope = roiUnion.getEnvelopeInternal();
+ 
+-            if (buffer != null && buffer > 0) {
++            /*if (buffer != null && buffer > 0) {
+                 if (!"EPSG:4326".equals(ciReference.getSRS())) {
+                     envelope.expandBy(buffer);
+                     roiBuffer = roiUnion.buffer(buffer);
+@@ -371,7 +423,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
+                         union = union.union(roiBuffer);
+                     }
+                 }
+-            }
++            }*/
+ 
+             rois.clear();
+             rois.add(roiUnion);
+diff --git a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridCUDAProcess.java b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridCUDAProcess.java
+index 8be46ed..1d68844 100644
+--- a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridCUDAProcess.java
++++ b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridCUDAProcess.java
+@@ -127,6 +127,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+             @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") SoilSealingSubIndexType subId,
+             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
+             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
++            @DescribeParameter(name = "originalRois", min = 0, description = "Administrative Areas") List<Geometry> originalRois,
+             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
+             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
+             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
+@@ -176,6 +177,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+ 
+         // If the index is 7a-8-9-10 then the input Geometries must be transformed to the Model Space
+         List<Geometry> geoms = new ArrayList<Geometry>();
++        List<Geometry> originalGeoms = new ArrayList<Geometry>();
+         final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) referenceCoverage
+                 .getGridGeometry()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+         if (inRasterSpace) {
+@@ -190,8 +192,22 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+                     throw new ProcessException(e);
+                 }
+             }
++            
++            for (Geometry geo : originalRois) {
++                try {
++                    originalGeoms.add(JTS.transform(geo, ProjectiveTransform.create(gridToWorldCorner)));
++                } catch (MismatchedDimensionException e) {
++                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
++                    throw new ProcessException(e);
++                } catch (TransformException e) {
++                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
++                    throw new ProcessException(e);
++                }
++            }
++            
+         } else {
+             geoms.addAll(rois);
++            originalGeoms.addAll(originalRois);
+         }
+ 
+         // Check if the Geometries must be reprojected
+@@ -209,12 +225,15 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+         final CoordinateReferenceSystem refCrs = referenceCoverage.getCoordinateReferenceSystem();
+         for (int i = 0; i < geosize; i++) {
+             Geometry geo = geoms.get(i);
++            Geometry originalGeo = originalGeoms.get(i);
+ 
+             geo.setUserData(refCrs);
++            originalGeo.setUserData(refCrs);
+ 
+             if (geo.getSRID() == 0) {
+                 try {
+                     geo.setSRID(CRS.lookupEpsgCode(refCrs, true));
++                    originalGeo.setSRID(CRS.lookupEpsgCode(refCrs, true));
+                 } catch (FactoryException e) {
+                     LOGGER.log(Level.WARNING, e.getMessage(), e);
+                 }
+@@ -235,14 +254,17 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+             // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
+             int counter = 0;
+             int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0);
+-            for (Geometry geo : geoms) {
++            for (int g = 0; g<geoms.size(); g++) {
++                Geometry geo = geoms.get(g);
++                Geometry originalGeo = originalGeoms.get(g);
++                
+                 // Create the CUDABean object
+                 CUDABean bean = new CUDABean();
+                 bean.setAreaPix(areaPx);
+ 
+                 // Populate it with Reference coverage parameters
+                 try {
+-                    populateBean(bean, true, referenceCoverage, geo, null, buffer);
++                    populateBean(bean, true, referenceCoverage, geo, originalGeo, null, buffer);
+ 
+                     // Set the population values if needed
+                     if (populations != null) {
+@@ -252,7 +274,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+     
+                     // Do the same for the Current Coverage if present
+                     if (nowCoverage != null) {
+-                        populateBean(bean, false, nowCoverage, geo, null, buffer);
++                        populateBean(bean, false, nowCoverage, geo, originalGeo, null, buffer);
+                         // Set the population values if needed
+                         if (populations != null) {
+                             Integer popCur = populations.get(1).get(counter);
+@@ -264,7 +286,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+                     // Update counter
+                     counter++;
+                 } catch (Exception e) {
+-                    LOGGER.log(Level.WARNING, geo.toText(), e);
++                    LOGGER.log(Level.SEVERE, geo.toText(), e);
++                    throw new ProcessException(e);
+                 }
+             }
+         } catch (Exception e) {
+@@ -636,21 +659,22 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+      * @param reference
+      * @param coverage
+      * @param geo
++     * @param originalGeo 
+      * @param transform
+      * @throws IOException
+      * @throws MismatchedDimensionException
+      * @throws TransformException
+      */
+     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
+-            Geometry geo, MathTransform transform, int buffer)
++            Geometry geo, Geometry originalGeo, MathTransform transform, int buffer)
+             throws IOException, MismatchedDimensionException, TransformException {
+ 
+         RenderedImage image = coverage.getRenderedImage();
+ 
+         // 0) Check if a buffer must be applied
+-        Geometry originalGeo = (Geometry) geo.clone();
++        //Geometry originalGeo = (Geometry) geo.clone();
+         if (buffer > 0) {
+-            try {
++            /*try {
+                 if (!"EPSG:4326".equals(
+                         CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
+                     geo = geo.buffer(buffer);
+@@ -659,7 +683,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess
+                 }
+             } catch (FactoryException e) {
+                 geo = geo.buffer(buffer);
+-            }
++            }*/
+         }
+ 
+         // 1) Crop the two coverages with the selected Geometry
+diff --git a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridProcess.java b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridProcess.java
+index 38e05fb..4045f3a 100644
+--- a/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridProcess.java
++++ b/src/extension/wps-soil-sealing/wps-soil-sealing-index/src/main/java/org/geoserver/wps/gs/soilsealing/UrbanGridProcess.java
+@@ -182,6 +182,7 @@ public class UrbanGridProcess implements GSProcess {
+             @DescribeParameter(name = "subindex", min = 0, description = "String indicating which sub-index must be calculated") SoilSealingSubIndexType subId,
+             @DescribeParameter(name = "pixelarea", min = 0, description = "Pixel Area") Double pixelArea,
+             @DescribeParameter(name = "rois", min = 1, description = "Administrative Areas") List<Geometry> rois,
++            @DescribeParameter(name = "originalRois", min = 0, description = "Administrative Areas") List<Geometry> originalRois,
+             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
+             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
+             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,

@@ -164,7 +164,7 @@ public class CUDAClass {
         }
 
         double I_05_urbanSprawl = ((double) SUD / (double) SUTval) * 100;
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_05_urbanSprawl, "ssgci__05");
             storeIndex_double((double) SUD, "ssgci__SUD");
             storeIndex_double((double) SUTval, "ssgci__SUT");
@@ -189,7 +189,7 @@ public class CUDAClass {
 
         double I_06_edgeDensity = ((double) Sperimeter * cellSize) / (SUTval * areaOfOnePixel)
                 / m2_to_ha;
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_06_edgeDensity, "ssgci__06");
             storeIndex_double((double) SUTval, "ssgci__SUT");
             storeIndex_double((double) Sperimeter, "ssgci__Sperimeter");
@@ -215,7 +215,7 @@ public class CUDAClass {
 
         double I_07a_UrbanArea = ((double) SUTval / ST) * 100;
 
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_07a_UrbanArea, "ssgci__07a");
             storeIndex_double((double) SUTval, "ssgci__SUT");
             storeIndex_double(ST, "ssgci__ST");
@@ -242,7 +242,7 @@ public class CUDAClass {
         // areaOfOnePixel is useless because it's both at numerator and denominator
         double I_07b_HighestPolygonRatio = (maxHistogramValue / (double) SUTval) * 100.0;
 
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_07b_HighestPolygonRatio, "ssgci__07b");
             storeIndex_double((double) SUTval, "ssgci__SUT");
             storeIndex_double(maxHistogramValue, "ssgci__maxHistogramValue");
@@ -275,7 +275,7 @@ public class CUDAClass {
 
         double I_07c_OthersPolygonRatio = (S_poly_notmax / (double) N_other_polys) * m2_to_ha;
 
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_07c_OthersPolygonRatio, "ssgci__07c");
             storeIndex_double(S_poly_notmax, "ssgci__S_poly_notmax");
             storeIndex_double(maxHistogramValue, "ssgci__maxHistogramValue");
@@ -332,7 +332,7 @@ public class CUDAClass {
         double I_06_edgeDensity = (((double) Sperimeter * cellSize) / (SUTval * areaOfOnePixel))
                 / m2_to_ha;
 
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             storeIndex_double(I_07b_HighestPolygonRatio, "ssgci__07b");
             storeIndex_double(I_07c_OthersPolygonRatio, "ssgci__07c");
             storeIndex_double(I_06_edgeDensity, "ssgci__06");
@@ -511,7 +511,7 @@ public class CUDAClass {
              */
 
             /*
-             * if(UrbanGridCUDAProcess.TESTING){ byte BIN[] = new byte[map_len]; byte ROI[] = new byte[map_len]; if (year == 0) { BIN =
+             * if(SoilSealingTestUtils.TESTING){ byte BIN[] = new byte[map_len]; byte ROI[] = new byte[map_len]; if (year == 0) { BIN =
              * beans.get(admin_unit).getReferenceImage(); }else if(year == 1) { BIN = beans.get(admin_unit).getCurrentImage(); }
              * 
              * ROI = beans.get(admin_unit).roi; int SUT_cpu = 0; for(ii=0;ii<map_len;ii++){ SUT_cpu += (int) (BIN[ii]*ROI[ii]); } //ALTERNATIVE :: sum
@@ -874,7 +874,7 @@ public class CUDAClass {
                 // (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
                 // elapsed_time += (int)( (double)(end_t - start_t ) /
                 // (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-                if (UrbanGridCUDAProcess.TESTING) {
+                if (SoilSealingTestUtils.TESTING) {
                     try {
                         Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
                                 Pointer.to(new int[] { WIDTH_e }),
@@ -900,7 +900,7 @@ public class CUDAClass {
 
                         cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f, sizeUintL_s);
 
-                        UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
+                        SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
                                 lab_mat_cpu_f, DataBuffer.TYPE_INT, "ssgci__intra_tile_labeling");
 
                     } catch (IOException e) {
@@ -985,7 +985,7 @@ public class CUDAClass {
                 // (double)(end_t - start_t ) / (double)CLOCKS_PER_SEC * 1000 ));
                 // elapsed_time += (int)( (double)(end_t - start_t ) /
                 // (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
-                if (UrbanGridCUDAProcess.TESTING) {
+                if (SoilSealingTestUtils.TESTING) {
                     try {
                         Pointer kern_08 = Pointer.to(Pointer.to(lab_mat_gpu),
                                 Pointer.to(new int[] { WIDTH_e }),
@@ -1010,7 +1010,7 @@ public class CUDAClass {
                         // (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
 
                         cuMemcpyDtoH(Pointer.to(lab_mat_cpu_f), lab_mat_gpu_f, sizeUintL_s);
-                        UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
+                        SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
                                 lab_mat_cpu_f, DataBuffer.TYPE_INT, "ssgci__Lrand");
 
                     } catch (IOException e) {
@@ -1086,7 +1086,7 @@ public class CUDAClass {
                 // elapsed_time += (int)( (double)(end_t - start_t ) /
                 // (double)CLOCKS_PER_SEC * 1000 );// elapsed time [ms]:
 
-                if (UrbanGridCUDAProcess.TESTING) {
+                if (SoilSealingTestUtils.TESTING) {
                     try {
                         int ID_rand_cpu[] = new int[Nbins];
                         int ID_1toN_cpu[] = new int[Nbins];
@@ -1157,9 +1157,9 @@ public class CUDAClass {
                 /*
                  * debugging
                  */
-                if (UrbanGridCUDAProcess.TESTING) {
+                if (SoilSealingTestUtils.TESTING) {
                     try {
-                        UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
+                        SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
                                 lab_mat_cpu_f, DataBuffer.TYPE_INT, "ssgci_lab");
                     } catch (IOException e) {
                         LOGGER.log(Level.WARNING, "Could not save GeoTIFF Sample for testing", e);
@@ -1218,7 +1218,7 @@ public class CUDAClass {
 
                 cuMemcpyDtoH(Pointer.to(h_histogram), d_histogram, Nbins_0 * Sizeof.INT);
 
-                if (UrbanGridCUDAProcess.TESTING) {
+                if (SoilSealingTestUtils.TESTING) {
                     try {
                         storePlainTextSampleFile(h_histogram, "ssgci_histogram");
                     } catch (FileNotFoundException e) {
@@ -1311,7 +1311,7 @@ public class CUDAClass {
     }
 
     private static void storeIndex_double(double INDEX, String name) throws FileNotFoundException {
-        final File file = new File(UrbanGridCUDAProcess.TESTING_DIR, name/*
+        final File file = new File(SoilSealingTestUtils.TESTING_DIR, name/*
                                                                           * +(System . nanoTime ())
                                                                           */
                 + ".txt");
@@ -1322,7 +1322,7 @@ public class CUDAClass {
 
     private static void storePlainTextSampleFile(int[] data, String name)
             throws FileNotFoundException {
-        final File file = new File(UrbanGridCUDAProcess.TESTING_DIR, name/*
+        final File file = new File(SoilSealingTestUtils.TESTING_DIR, name/*
                                                                           * +(System . nanoTime ())
                                                                           */
                 + ".txt");
@@ -1336,7 +1336,7 @@ public class CUDAClass {
 
     private static void storePlainTextSampleFile_double(double[] data, String name)
             throws FileNotFoundException {
-        final File file = new File(UrbanGridCUDAProcess.TESTING_DIR, name/*
+        final File file = new File(SoilSealingTestUtils.TESTING_DIR, name/*
                                                                           * +(System . nanoTime ())
                                                                           */
                 + ".txt");
@@ -1714,8 +1714,8 @@ public class CUDAClass {
             // System.out.println("Perimeter = %d\n\n",sumPerimeter);
 
             cuMemcpyDtoH(Pointer.to(host_PERI), dev_PERI, sizeDouble);
-            if (UrbanGridCUDAProcess.TESTING) {
-                UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, host_PERI,
+            if (SoilSealingTestUtils.TESTING) {
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, host_PERI,
                         DataBuffer.TYPE_DOUBLE, "ssgci__PERI");
             }
             // System.out.println("\n CUDA Finished!!\n");
@@ -1857,7 +1857,10 @@ public class CUDAClass {
             cuModuleGetFunction(F_sum_of_3_LINES, module, "_Z14sum_of_3_LINESPKdjjPdj");
             // mask_twice
             CUfunction F_mask_twice = new CUfunction();
-            cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
+            // -- ORIGINAL (both FRAG=0 & ROI=0 are set to zero in FRAG)
+            //cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
+            // -- NEW [to allow enhanced legend] (FRAG[ROI=0]=2, FRAG[FRAG=0]=0) 
+            cuModuleGetFunction(F_mask_twice, module, "_Z13mask_twice__2PdPKhS1_jjd");
 
             /*
              * DIM of ARRAYS in BYTES
@@ -2195,10 +2198,10 @@ public class CUDAClass {
             // ...to be completed:
             cuMemcpyDtoH(Pointer.to(host_FRAG), dev_FRAG, sizeDouble);
 
-            if (UrbanGridCUDAProcess.TESTING) {
+            if (SoilSealingTestUtils.TESTING) {
                 try {
                     double isRural = rural == false ? 0 : 1;
-                    UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, host_FRAG,
+                    SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, host_FRAG,
                             DataBuffer.TYPE_DOUBLE, "ssgci_FRAG");
                     storeIndex_double(RADIUS * beans.get(0).getCellSize(), "ssgci_radius");
                     storeIndex_double(isRural, "ssgci_rural");
@@ -2514,9 +2517,9 @@ public class CUDAClass {
                 outCount[ii] = ((double) host_LTAKE_count[ii] * areaOfOnePx) * m2_to_ha; // take only the net value!!
             }
 
-            if (UrbanGridCUDAProcess.TESTING) {
+            if (SoilSealingTestUtils.TESTING) {
                 try {
-                    UrbanGridCUDAProcess.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
+                    SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT,
                             host_LTAKE_map, DataBuffer.TYPE_DOUBLE, "ssgci_LTAKE_map");
                     storePlainTextSampleFile_double(outCount, "ssgci_LTAKE_count");
                 } catch (IOException e) {
@@ -2579,7 +2582,7 @@ public class CUDAClass {
          * wheatLoss > 0 ––> loss of wheat supply wheatLoss = 0 ––> unchanged wheat supply wheatLoss < 0 ––> gain of wheat supply
          */
 
-        if (UrbanGridCUDAProcess.TESTING) {
+        if (SoilSealingTestUtils.TESTING) {
             try {
                 storeIndex_double(wheatLoss, "ssgci__10");
             } catch (IOException e) {

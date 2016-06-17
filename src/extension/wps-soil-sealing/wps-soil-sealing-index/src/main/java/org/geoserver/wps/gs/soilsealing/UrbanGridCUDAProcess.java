@@ -8,17 +8,14 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferInt;
 import java.awt.image.PixelInterleavedSampleModel;
 import java.awt.image.Raster;
 import java.awt.image.RenderedImage;
 import java.awt.image.SampleModel;
 import java.awt.image.WritableRaster;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -34,20 +31,11 @@ import javax.media.jai.operator.LookupDescriptor;
 import javax.media.jai.operator.MosaicDescriptor;
 
 import org.geoserver.catalog.FeatureTypeInfo;
-import org.geoserver.wps.gs.CoverageImporter;
 import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
-import org.geotools.coverage.Category;
-import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
-import org.geotools.coverage.grid.GridCoverageFactory;
 import org.geotools.coverage.grid.GridGeometry2D;
-import org.geotools.coverage.grid.io.AbstractGridFormat;
-import org.geotools.factory.GeoTools;
-import org.geotools.factory.Hints;
-import org.geotools.gce.geotiff.GeoTiffFormat;
-import org.geotools.gce.geotiff.GeoTiffWriter;
 import org.geotools.geometry.Envelope2D;
 import org.geotools.geometry.GeneralEnvelope;
 import org.geotools.geometry.jts.JTS;
@@ -62,11 +50,8 @@ import org.geotools.referencing.operation.transform.ProjectiveTransform;
 import org.geotools.resources.image.ImageUtilities;
 import org.jaitools.imageutils.ImageLayout2;
 import org.jaitools.imageutils.ROIGeometry;
-import org.opengis.coverage.grid.GridCoverage;
 import org.opengis.geometry.MismatchedDimensionException;
 import org.opengis.metadata.spatial.PixelOrientation;
-import org.opengis.parameter.GeneralParameterValue;
-import org.opengis.parameter.ParameterValueGroup;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.datum.PixelInCell;
@@ -87,7 +72,11 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
     /** Default Pixel Area */
     private static final double PIXEL_AREA = 400;
-
+    
+    /** Default NODATAVALUE */
+    // ––> to be used in place of zero when it conflicts with map results (e.g. fragmentation)
+    //private static final double NODATA_VALUE = -99;
+    
     private static final CropCoverage CROP = new CropCoverage();
 
     /** Imperviousness Vectorial Layer */
@@ -101,11 +90,6 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     /** Path associated to the shapefile of the current image */
     @SuppressWarnings("unused")
     private String currentYear;
-
-    /** Set whether the superuser is performing a test a (cuda) codes to calculate GUI indices */
-    public final static boolean TESTING = true;
-
-    public final static String TESTING_DIR = "/media/DATI/db-backup/ssgci-data/testing";// "/opt/soil_sealing/exchange_data/testing";
 
     public UrbanGridCUDAProcess(FeatureTypeInfo imperviousnessReference, String referenceYear,
             String currentYear) {
@@ -439,17 +423,17 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         // I assume that the test is performed using ONE admin and ONE year.
         // I should add other Input parameters according to the selected index.
         // I save other intermediate results on hdd within the corresponding java class
-        if (TESTING && soilSealingIndexType.getIdx() > 4) {
+        if (SoilSealingTestUtils.TESTING && soilSealingIndexType.getIdx() > 4) {
             try {
                 int WIDTH = beans.get(0).width;
                 int HEIGHT = beans.get(0).height;
                 // ROI
-                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi,
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).roi,
                         DataBuffer.TYPE_BYTE, "ssgci_roi");
-                storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(),
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getReferenceImage(),
                         DataBuffer.TYPE_BYTE, "ssgci_bin");
                 if (n_years > 1)
-                    storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(),
+                    SoilSealingTestUtils.storeGeoTIFFSampleImage(beans, WIDTH, HEIGHT, beans.get(0).getCurrentImage(),
                             DataBuffer.TYPE_BYTE, "ssgci_bin2");
             } catch (IOException e) {
                 LOGGER.log(Level.WARNING, "Could not save GeoTIFF Sample for testing", e);
@@ -816,71 +800,6 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             w.affine(AffineTransform.getTranslateInstance(rect.x, rect.y), null, null);
         }
         return w.getRenderedImage();
-    }
-
-    @SuppressWarnings("serial")
-    public static void storeGeoTIFFSampleImage(List<CUDABean> beans, int w, int h, Object data,
-            int dataType, String name) throws IOException {
-        /**
-         * create the final coverage using final envelope
-         */
-        // Definition of the SampleModel
-        final SampleModel sm = new PixelInterleavedSampleModel(dataType, w, h, 1, w,
-                new int[] { 0 });
-        // DataBuffer containing input data
-
-        DataBuffer db1 = null;
-        if (dataType == DataBuffer.TYPE_INT) {
-            db1 = new DataBufferInt((int[]) data, w * h);
-        } else if (dataType == DataBuffer.TYPE_BYTE) {
-            db1 = new DataBufferByte((byte[]) data, w * h);
-        } else if (dataType == DataBuffer.TYPE_DOUBLE) {
-            db1 = new DataBufferDouble((double[]) data, w * h);
-        }
-        // Writable Raster used for creating the BufferedImage
-        final WritableRaster wr = com.sun.media.jai.codecimpl.util.RasterFactory
-                .createWritableRaster(sm, db1, new Point(0, 0));
-        final BufferedImage image = new BufferedImage(ImageUtil.createColorModel(sm), wr, false,
-                null);
-
-        // hints for tiling
-        final Hints hints = GeoTools.getDefaultHints().clone();
-
-        // build the output sample dimensions, use the default value ( 0 ) as
-        // the no data
-        final GridSampleDimension outSampleDimension = new GridSampleDimension("classification",
-                new Category[] { Category.NODATA }, null).geophysics(true);
-
-        final GridCoverage2D retValue = new GridCoverageFactory(hints).create(name, image,
-                beans.get(0).getReferenceCoverage().getEnvelope(),
-                new GridSampleDimension[] { outSampleDimension },
-                new GridCoverage[] { beans.get(0).getReferenceCoverage() },
-                new HashMap<String, Double>() {
-                    {
-                        put("GC_NODATA", 0d);
-                    }
-                });
-
-        final File file = new File(UrbanGridCUDAProcess.TESTING_DIR,
-                name/* +(System.nanoTime()) */ + ".tif");
-        GeoTiffWriter writer = new GeoTiffWriter(file);
-
-        // setting the write parameters for this geotiff
-        final ParameterValueGroup gtiffParams = new GeoTiffFormat().getWriteParameters();
-        gtiffParams.parameter(AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
-                .setValue(CoverageImporter.DEFAULT_WRITE_PARAMS);
-        final GeneralParameterValue[] wps = (GeneralParameterValue[]) gtiffParams.values()
-                .toArray(new GeneralParameterValue[1]);
-
-        try {
-            writer.write(retValue, wps);
-        } finally {
-            try {
-                writer.dispose();
-            } catch (Exception e) {
-                throw new IOException("Unable to write the output raster.", e);
-            }
-        }
     }
 
     /**

@@ -4,7 +4,17 @@
  */
 package org.geoserver.wps.gs.soilsealing;
 
+import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
+import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
+import it.geosolutions.jaiext.stats.Statistics;
+import it.geosolutions.jaiext.stats.Statistics.StatsType;
+import it.geosolutions.jaiext.zonal.ZonalStatsDescriptor;
+import it.geosolutions.jaiext.zonal.ZonalStatsRIF;
+import it.geosolutions.jaiext.zonal.ZoneGeometry;
+
+import java.awt.image.DataBufferByte;
 import java.awt.image.RenderedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -23,14 +33,6 @@ import org.geotools.process.gs.GSProcess;
 import org.jaitools.imageutils.ROIGeometry;
 
 import com.vividsolutions.jts.geom.Geometry;
-
-import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
-import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
-import it.geosolutions.jaiext.stats.Statistics;
-import it.geosolutions.jaiext.stats.Statistics.StatsType;
-import it.geosolutions.jaiext.zonal.ZonalStatsDescriptor;
-import it.geosolutions.jaiext.zonal.ZonalStatsRIF;
-import it.geosolutions.jaiext.zonal.ZoneGeometry;
 
 /**
  * This class calculates the indexes 1-2-3-4 from the input coverages. The user should pass the requested parameters and the index number and the
@@ -210,12 +212,35 @@ public class CLCProcess implements GSProcess {
             numBins = new int[] { 255 };
         }
 
+        if (SoilSealingTestUtils.TESTING) {
+            try {
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(
+                        referenceCoverage.getEnvelope(),
+                        referenceCoverage,
+                        inputImage.getWidth(), 
+                        inputImage.getHeight(), 
+                        ((DataBufferByte)inputImage.getData().getDataBuffer()).getData(),
+                        inputImage.getSampleModel().getDataType(), "ssgci__"+soilSealingIndexType.getName());
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        
         // Creation of a list of ROIs, each one for each Geometry object
         List<ROI> roilist = new ArrayList<ROI>();
-
+        
         for (Geometry geom : rois) {
             roilist.add(new ROIGeometry(geom));
         }
+        
+        if (SoilSealingTestUtils.TESTING) {
+            Geometry geometry = rois.get(0);
+            
+            // SoilSealingTestUtils.storeGeometryAsShapeFile(geometry, "ssgci__Coverage");
+            SoilSealingTestUtils.storeGeometryAsWKT(geometry, "ssgci__"+soilSealingIndexType.getName(), referenceCoverage.getCoordinateReferenceSystem());
+        }
+        
         // Selection of the parameters
         RenderedOp zonalStats = ZonalStatsDescriptor.create(inputImage, null, null, roilist, null,
                 null, false, bands, stats, minBound, maxBound, numBins, null, false, null);

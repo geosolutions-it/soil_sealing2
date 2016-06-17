@@ -134,6 +134,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
+            @DescribeParameter(name = "pixelSize", min = 0, description = "Pixel Size") double pixelSize,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda,
             @DescribeParameter(name = "jobUid", description = "Name of the user running the Job") String jobUid)
             throws IOException {
@@ -406,7 +407,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                             nowCoverage, 
                             classes, 
                             SoilSealingIndexType.translateIndex(index), 
-                            null, 
+                            Math.pow(pixelSize, 2), 
                             rois, 
                             populations, 
                             null, 

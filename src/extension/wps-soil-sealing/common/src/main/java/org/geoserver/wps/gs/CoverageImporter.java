@@ -221,7 +221,6 @@ public class CoverageImporter {
         } catch (IOException e) {
             throw new ProcessException("I/O Exception", e);
         } catch (Exception e) {
-            e.printStackTrace();
             throw new ProcessException("Exception", e);
         }
     }

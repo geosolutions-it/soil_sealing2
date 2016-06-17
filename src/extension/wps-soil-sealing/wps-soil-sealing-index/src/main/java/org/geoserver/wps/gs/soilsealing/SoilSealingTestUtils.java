@@ -41,6 +41,7 @@ import org.geotools.coverage.Category;
 import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridCoverageFactory;
+import org.geotools.coverage.grid.io.AbstractGridCoverageWriter;
 import org.geotools.coverage.grid.io.AbstractGridFormat;
 import org.geotools.data.DataUtilities;
 import org.geotools.data.collection.ListFeatureCollection;
@@ -49,6 +50,8 @@ import org.geotools.data.simple.SimpleFeatureCollection;
 import org.geotools.factory.GeoTools;
 import org.geotools.factory.Hints;
 import org.geotools.feature.simple.SimpleFeatureBuilder;
+import org.geotools.gce.arcgrid.ArcGridFormat;
+import org.geotools.gce.arcgrid.ArcGridWriter;
 import org.geotools.gce.geotiff.GeoTiffFormat;
 import org.geotools.gce.geotiff.GeoTiffWriter;
 import org.geotools.referencing.CRS;
@@ -116,26 +119,21 @@ public class SoilSealingTestUtils {
 
         // build the output sample dimensions, use the default value ( 0 ) as
         // the no data
-        final GridSampleDimension outSampleDimension = new GridSampleDimension("classification",
-                new Category[] { Category.NODATA }, null).geophysics(true);
+        final GridSampleDimension outSampleDimension = new GridSampleDimension("classification");
 
         final GridCoverage2D retValue = new GridCoverageFactory(hints).create(name, image,
                 envelope,
                 new GridSampleDimension[] { outSampleDimension },
                 new GridCoverage[] { coverage },
-                new HashMap<String, Double>() {
-                    {
-                        put("GC_NODATA", 0d);
-                    }
-                });
+                null);
 
         final File file = new File(SoilSealingTestUtils.TESTING_DIR,
                 name/* +(System.nanoTime()) */ + ".tif");
-        GeoTiffWriter writer = new GeoTiffWriter(file);
+        AbstractGridCoverageWriter writer = new GeoTiffWriter(file) ;//GeoTiffWriter(file);
 
         // setting the write parameters for this geotiff
-        final ParameterValueGroup gtiffParams = new GeoTiffFormat().getWriteParameters();
-        gtiffParams.parameter(AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
+        final ParameterValueGroup gtiffParams = new ArcGridFormat().getWriteParameters();
+        gtiffParams.parameter(ArcGridFormat.GEOTOOLS_WRITE_PARAMS.getName().toString())
                 .setValue(CoverageImporter.DEFAULT_WRITE_PARAMS);
         final GeneralParameterValue[] wps = (GeneralParameterValue[]) gtiffParams.values()
                 .toArray(new GeneralParameterValue[1]);

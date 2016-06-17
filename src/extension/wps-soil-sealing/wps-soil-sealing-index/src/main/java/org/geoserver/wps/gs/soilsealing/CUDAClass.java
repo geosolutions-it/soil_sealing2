@@ -32,8 +32,10 @@ import java.awt.image.DataBufferInt;
 import java.awt.image.PixelInterleavedSampleModel;
 import java.awt.image.SampleModel;
 import java.awt.image.WritableRaster;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Arrays;
@@ -55,6 +57,7 @@ import jcuda.driver.CUmodule;
 import jcuda.driver.CUresult;
 import jcuda.driver.JCudaDriver;
 
+import org.apache.commons.io.IOUtils;
 import org.geoserver.wps.gs.CoverageImporter;
 import org.geoserver.wps.gs.soilsealing.UrbanGridCUDAProcess.CUDABean;
 import org.geotools.coverage.Category;
@@ -1858,8 +1861,8 @@ public class CUDAClass {
             // mask_twice
             CUfunction F_mask_twice = new CUfunction();
             // -- ORIGINAL (both FRAG=0 & ROI=0 are set to zero in FRAG)
-            //cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
-            // -- NEW [to allow enhanced legend] (FRAG[ROI=0]=2, FRAG[FRAG=0]=0) 
+            // cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
+            // -- NEW [to allow enhanced legend] (FRAG[ROI=0]=2, FRAG[FRAG=0]=0)
             cuModuleGetFunction(F_mask_twice, module, "_Z13mask_twice__2PdPKhS1_jjd");
 
             /*
@@ -2196,7 +2199,14 @@ public class CUDAClass {
              */
 
             // ...to be completed:
+
             cuMemcpyDtoH(Pointer.to(host_FRAG), dev_FRAG, sizeDouble);
+
+            // System.out.println("\n CUDA Finished!!\n");
+            /*
+             * long estimatedTime = System.currentTimeMillis() - startTime; System.out.println("Elapsed time fragmentation()" + estimatedTime +
+             * " [ms]");
+             */
 
             if (SoilSealingTestUtils.TESTING) {
                 try {
@@ -2209,12 +2219,36 @@ public class CUDAClass {
                     LOGGER.log(Level.WARNING,
                             "Could not save Index[10] 'Loss of Food Supply' for testing", e);
                 }
+                BufferedWriter outputWriter = null;
+                try {
+                    File dump = new File(SoilSealingTestUtils.TESTING_DIR, "ssgi_FRAG_matrix");
+
+                    outputWriter = new BufferedWriter(new FileWriter(dump));
+                    for (int h = 0; h < HEIGHT; h++) {
+                        for (int w = 0; w < WIDTH; w++) {
+                            outputWriter.write(Double.toString(host_FRAG[w + h * WIDTH]));
+                            if (w < WIDTH - 1) {
+                                outputWriter.write(",");
+                            }
+                        }
+                        outputWriter.newLine();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+
+                } finally {
+                    if (outputWriter != null) {
+                        try {
+                            outputWriter.flush();
+                            outputWriter.close();
+                        } catch (IOException e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    }
+                }
             }
-            // System.out.println("\n CUDA Finished!!\n");
-            /*
-             * long estimatedTime = System.currentTimeMillis() - startTime; System.out.println("Elapsed time fragmentation()" + estimatedTime +
-             * " [ms]");
-             */
+            
             return host_FRAG; // --> return host_FRAG
 
         } finally {
@@ -2622,7 +2656,7 @@ public class CUDAClass {
         byte[] ROI = beans.get(j).roi;
 
         for (int ii = 0; ii < map_len; ii++) {
-            fictitious_curImage[ii] = (byte)(fictitious_refImage[ii] + (ROI[ii]>0?0:1));
+            fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 0 : 1));
         }
         beans.get(j).setCurrentImage(fictitious_curImage);
 

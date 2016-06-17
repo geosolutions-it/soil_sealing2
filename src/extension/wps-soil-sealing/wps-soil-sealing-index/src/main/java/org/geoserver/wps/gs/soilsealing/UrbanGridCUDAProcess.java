@@ -312,7 +312,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             // Mosaic of the images
             double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
                     || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
-                            ? new double[] { -1.0 } : new double[] { 0.0 });
+                            ? new double[] { SoilSealingImperviousnessProcess.FRAG_NODATA } : 
+                                new double[] { SoilSealingImperviousnessProcess.NODATA });
             RenderedImage finalRef = MosaicDescriptor.create(refImgs,
                     MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, roiObjs, null, background, hints);
 
@@ -546,7 +547,10 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                     } else {
                         result[j][n_years] = new double[result[j][0].length];
                         for (int ii = 0; ii < result[j][0].length; ii++) {
-                            result[j][n_years][ii] = result[j][1][ii] - result[j][0][ii];
+                            double refValue = (result[j][0][ii] != SoilSealingImperviousnessProcess.FRAG_NODATA ? result[j][0][ii] : 0d);
+                            double curValue = (result[j][1][ii] != SoilSealingImperviousnessProcess.FRAG_NODATA ? result[j][1][ii] : 0d);
+
+                            result[j][n_years][ii] = (curValue - refValue >= 0 ? curValue - refValue : SoilSealingImperviousnessProcess.FRAG_NODATA);
                         }
                     }
                 }

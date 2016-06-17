@@ -236,7 +236,8 @@ public class UrbanGridProcess implements GSProcess {
             break;
         case FRAGMENTATION:
             // Raster elaboration
-            return prepareImages(referenceCoverage, nowCoverage, rois, areaPx * HACONVERTER);
+            return prepareImages(referenceCoverage, nowCoverage, rois, areaPx * HACONVERTER, SoilSealingImperviousnessProcess.FRAG_NODATA);
+            
         // For the indexes 9-10 Zonal Stats are calculated
         case LAND_TAKE:
             // I have to compute IMPERVIOUSNESS difference between two TIMES: Icurrent - Ireference
@@ -598,10 +599,11 @@ public class UrbanGridProcess implements GSProcess {
      * @param nowCoverage Input current coverage
      * @param geoms Input Administrative Areas
      * @param pixelArea Pixel area
+     * @param destinationNoData 
      * @return
      */
     private List<StatisticContainer> prepareImages(GridCoverage2D referenceCoverage,
-            GridCoverage2D nowCoverage, List<Geometry> geoms, double pixelArea) {
+            GridCoverage2D nowCoverage, List<Geometry> geoms, double pixelArea, double destinationNoData) {
         // Boolean indicating the presence of the reference and current coverages
         boolean refExists = referenceCoverage != null;
         boolean nowExists = nowCoverage != null;
@@ -612,9 +614,12 @@ public class UrbanGridProcess implements GSProcess {
         // Merging of the 2 images if they are both present or selection of the single image
         if (refExists) {
             if (nowExists) {
-                double destinationNoData = 0d;
-                inputImage = BandMergeDescriptor.create(null, destinationNoData, hints,
-                        referenceCoverage.getRenderedImage(), nowCoverage.getRenderedImage());
+                inputImage = BandMergeDescriptor.create(
+                        null, 
+                        destinationNoData, 
+                        hints,
+                        referenceCoverage.getRenderedImage(), 
+                        nowCoverage.getRenderedImage());
             } else {
                 inputImage = referenceCoverage.getRenderedImage();
             }
@@ -633,8 +638,7 @@ public class UrbanGridProcess implements GSProcess {
         int rightPad = 10;
         int bottomPad = 10;
         int topPad = 10;
-        // Destination No Data value
-        double destNoData = 0;
+
         // Final list initialization
         List<StatisticContainer> stats = new ArrayList<StatisticContainer>(1);
 
@@ -642,7 +646,7 @@ public class UrbanGridProcess implements GSProcess {
 
         // Buffer calculation
         RenderedOp buffered = BufferDescriptor.create(inputImage, BufferDescriptor.DEFAULT_EXTENDER,
-                leftPad, rightPad, topPad, bottomPad, rois, null, destNoData, null,
+                leftPad, rightPad, topPad, bottomPad, rois, null, destinationNoData, null,
                 DataBuffer.TYPE_DOUBLE, pixelArea, hints);
         // Selection of the first image
         RenderedOp imageRef = BandSelectDescriptor.create(buffered, new int[] { 0 }, hints);
@@ -656,8 +660,14 @@ public class UrbanGridProcess implements GSProcess {
 
             container.setNowImage(imageNow);
             // Calculation of the variation between current and reference images
-            RenderedOp diff = AlgebraDescriptor.create(Operator.SUBTRACT, null, null, destNoData,
-                    hints, imageNow, imageRef);
+            RenderedOp diff = AlgebraDescriptor.create(
+                    Operator.SUBTRACT, 
+                    null, 
+                    null, 
+                    destinationNoData,
+                    hints, 
+                    imageNow, 
+                    imageRef);
 
             container.setDiffImage(diff);
         }

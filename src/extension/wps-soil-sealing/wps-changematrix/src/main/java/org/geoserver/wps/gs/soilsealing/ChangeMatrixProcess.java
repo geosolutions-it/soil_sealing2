@@ -151,6 +151,8 @@ import com.vividsolutions.jts.geom.PrecisionModel;
 @DescribeProcess(title = "ChangeMatrix", description = "Compute the ChangeMatrix between two coverages")
 public class ChangeMatrixProcess implements GSProcess {
 
+    public static final double NODATA = 0d;
+
     static {
         Registry.registerRIF(JAI.getDefaultInstance(), new ChangeMatrixDescriptor(),
                 new ChangeMatrixRIF(), Registry.JAI_TOOLS_PRODUCT);
@@ -470,12 +472,15 @@ public class ChangeMatrixProcess implements GSProcess {
             final GridSampleDimension outSampleDimension = new GridSampleDimension("classification",
                     new Category[] { Category.NODATA }, null).geophysics(true);
             
-            final GridCoverage2D retValue = new GridCoverageFactory(hints).create(rasterName,
-                    result, referenceCoverage.getEnvelope(), 
+            final GridCoverage2D retValue = new GridCoverageFactory(hints).create(
+                    rasterName,
+                    result, 
+                    referenceCoverage.getEnvelope(), 
                     new GridSampleDimension[] { outSampleDimension },
-                    new GridCoverage[] { referenceCoverage }, new HashMap<String,Double>(){{
-                        put("GC_NODATA", 0d);
-                      }});
+                    new GridCoverage[] { referenceCoverage }, 
+                    new HashMap<String,Double>(){{
+                        put("GC_NODATA", ChangeMatrixProcess.NODATA);
+                    }});
             
             /**
              * Add Overviews...
@@ -517,8 +522,15 @@ public class ChangeMatrixProcess implements GSProcess {
             try {
                 ImportProcess importProcess = new ImportProcess(catalog);
                 GridCoverage2D retOvValue = gtiffReader.read(wps);
-                 importProcess.execute(null, retOvValue, wsName, null, retValue.getName().toString(), retValue.getCoordinateReferenceSystem(), null,
-                 defaultStyle);
+                importProcess.execute(
+                         null, 
+                         retOvValue, 
+                         wsName, 
+                         null, 
+                         retValue.getName().toString(), 
+                         retValue.getCoordinateReferenceSystem(), 
+                         null,
+                         defaultStyle);
             } finally {
                 if (gtiffReader != null) {
                     gtiffReader.dispose();

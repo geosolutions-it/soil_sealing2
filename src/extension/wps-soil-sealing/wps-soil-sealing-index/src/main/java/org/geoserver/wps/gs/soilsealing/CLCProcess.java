@@ -172,7 +172,7 @@ public class CLCProcess implements GSProcess {
         // Merging of the 2 images if they are both present or selection of the single image
         if (refExists) {
             if (nowExists) {
-                double destinationNoData = 0d;
+                double destinationNoData = -1d;
                 inputImage = BandMergeDescriptor.create(null, destinationNoData,
                         GeoTools.getDefaultHints(), referenceCoverage.getRenderedImage(),
                         nowCoverage.getRenderedImage());

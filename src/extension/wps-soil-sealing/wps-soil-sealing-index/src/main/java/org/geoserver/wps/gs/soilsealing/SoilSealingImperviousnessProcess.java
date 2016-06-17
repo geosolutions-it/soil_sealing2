@@ -11,6 +11,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ import org.geoserver.wps.gs.soilsealing.model.SoilSealingIndex;
 import org.geoserver.wps.gs.soilsealing.model.SoilSealingOutput;
 import org.geoserver.wps.gs.soilsealing.model.SoilSealingTime;
 import org.geoserver.wps.ppio.FeatureAttribute;
+import org.geotools.coverage.GridSampleDimension;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.GridCoverageFactory;
 import org.geotools.coverage.grid.GridGeometry2D;
@@ -58,6 +60,7 @@ import org.geotools.process.factory.DescribeResult;
 import org.geotools.resources.image.ImageUtilities;
 import org.geotools.util.NullProgressListener;
 import org.geotools.util.logging.Logging;
+import org.opengis.coverage.grid.GridCoverage;
 import org.opengis.coverage.grid.GridCoverageReader;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.filter.Filter;
@@ -83,6 +86,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
     private static final double INDEX_10_VALUE = 6.0;
 
     private final static Logger LOGGER = Logging.getLogger(SoilSealingImperviousnessProcess.class);
+
+    public static final double FRAG_NODATA = -1.0;
+
+    public static final double NODATA = 0.0;
 
     /*
      * case 1:  indexName = "Coverage coefficient"; 
@@ -308,7 +315,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             /**
              * Specific Soil Sealing Indexes Setups
              */
-            switch (SoilSealingIndexType.translateIndex(index)) {
+            final SoilSealingIndexType soilSealingIndexType = SoilSealingIndexType.translateIndex(index);
+            switch (soilSealingIndexType) {
                 case DISPERSIVE_URBAN_GROWTH:
                     if (!subIndex.equals("a"))
                         break;
@@ -394,13 +402,13 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             // Creation of a GridGeometry object used for forcing the reader to
             // read only the active zones
-            final Double buffer = (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0.0);
+            final Double buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0.0);
             final boolean mergeGeometries = 
-                    (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.URBAN_DISPERSION || 
-                     SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.EDGE_DENSITY || 
-                     SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH || 
-                     SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY || 
-                     SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT ? false : true);
+                    (soilSealingIndexType == SoilSealingIndexType.URBAN_DISPERSION || 
+                     soilSealingIndexType == SoilSealingIndexType.EDGE_DENSITY || 
+                     soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH || 
+                     soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY || 
+                     soilSealingIndexType == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT ? false : true);
             
             final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer, mergeGeometries);
 
@@ -458,7 +466,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("defaultStyle", defaultStyle));
             attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
             attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
-            attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
+            attributes.add(new FeatureAttribute("index", soilSealingIndexType.getDescription()));
             attributes.add(new FeatureAttribute("subindex", 
                     (subIndex != null ? 
                             (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
@@ -507,24 +515,24 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 indexValue = urbanGridProcess.execute(
                         referenceCoverage, 
                         nowCoverage, 
-                        SoilSealingIndexType.translateIndex(index),
+                        soilSealingIndexType,
                         SoilSealingSubIndexType.translate(subIndex), 
                         Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
-                        (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
             } else {
                 final UrbanGridProcess urbanGridProcess = new UrbanGridProcess(imperviousnessReference, referenceYear, currentYear);
 
                 indexValue = urbanGridProcess.execute(
                         referenceCoverage, 
                         nowCoverage, 
-                        SoilSealingIndexType.translateIndex(index), 
+                        soilSealingIndexType, 
                         SoilSealingSubIndexType.translate(subIndex), 
                         Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
-                        (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
             }
             long estimatedTime = System.currentTimeMillis() - startTime;
 
@@ -589,11 +597,15 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             // particular for JAVA-mode calculation of indices.
             String[] rasters = new String[] {};
             if (
-                SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.FRAGMENTATION || 
-                SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.LAND_TAKE || 
-                SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.NEW_URBANIZATION) {
+                soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
+                soilSealingIndexType == SoilSealingIndexType.LAND_TAKE || 
+                soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
                 
-                rasters = buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName, defaultStyle);
+                double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
+                        || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+                                ? new double[] { FRAG_NODATA } : new double[] { NODATA });
+                
+                rasters = buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName, defaultStyle, background[0]);
             }
 
             LOGGER.fine(++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()));
@@ -712,7 +724,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
      */
     private String[] buildRasterMap(SoilSealingDTO soilSealingIndexResult,
             List<StatisticContainer> indexValue, GridCoverage2D inputCov, String refWsName,
-            String defaultStyle) {
+            String defaultStyle, final double nodata) {
 
         StatisticContainer container = indexValue.get(0);
 
@@ -733,11 +745,15 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         // hints for tiling
         final Hints hints = GeoTools.getDefaultHints().clone();
 
+        // build the output sample dimensions, use the default value ( 0 ) as the no data
+        final GridSampleDimension outSampleDimension = new GridSampleDimension("classification");
+        
         GridCoverageFactory factory = new GridCoverageFactory(hints);
 
         Envelope envelope = inputCov.getEnvelope();
 
-        GridCoverage2D reference = factory.create(rasterRefName + time, referenceImage, envelope);
+        GridCoverage2D reference = factory.
+                create(rasterRefName + time, referenceImage, envelope);
 
         GridCoverage2D now = null;
 
@@ -748,9 +764,25 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 throw new ProcessException("Unable to calculate the difference image for index 8");
             }
 
-            now = factory.create(rasterCurName + time, nowImage, envelope);
+            now = factory.create(
+                    rasterCurName + time, 
+                    nowImage, 
+                    envelope,
+                    new GridSampleDimension[] { outSampleDimension },
+                    new GridCoverage[] { inputCov }, 
+                    new HashMap<String,Double>(){{
+                        put("GC_NODATA", nodata);
+                    }});
 
-            diff = factory.create(rasterDiffName + time, diffImage, envelope);
+            diff = factory.create(
+                    rasterDiffName + time, 
+                    diffImage, 
+                    envelope,
+                    new GridSampleDimension[] { outSampleDimension },
+                    new GridCoverage[] { inputCov }, 
+                    new HashMap<String,Double>(){{
+                        put("GC_NODATA", nodata);
+                    }});
         }
 
         /**
@@ -758,8 +790,15 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
          */
         // Importing of the Reference Coverage
         ImportProcess importProcess = new ImportProcess(catalog);
-        importProcess.execute(null, reference, refWsName, null, reference.getName().toString(),
-                reference.getCoordinateReferenceSystem(), null, defaultStyle);
+        importProcess.execute(
+                null, 
+                reference, 
+                refWsName, 
+                null, 
+                reference.getName().toString(),
+                reference.getCoordinateReferenceSystem(), 
+                null, 
+                defaultStyle);
 
         soilSealingIndexResult.getRefTime().getOutput()
                 .setLayerName(refWsName + ":" + reference.getName().toString());
@@ -767,15 +806,29 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         // Importing of the current and difference coverages if present
         if (now != null && soilSealingIndexResult.getCurTime() != null && soilSealingIndexResult.getCurTime().getOutput() != null) {
             // Current coverage
-            importProcess.execute(null, now, refWsName, null, now.getName().toString(),
-                    now.getCoordinateReferenceSystem(), null, defaultStyle);
+            importProcess.execute(
+                    null, 
+                    now, 
+                    refWsName, 
+                    null, 
+                    now.getName().toString(),
+                    now.getCoordinateReferenceSystem(), 
+                    null, 
+                    defaultStyle);
 
             soilSealingIndexResult.getCurTime().getOutput()
                     .setLayerName(refWsName + ":" + now.getName().toString());
 
             // Difference coverage
-            importProcess.execute(null, diff, refWsName, null, diff.getName().toString(),
-                    diff.getCoordinateReferenceSystem(), null, defaultStyle);
+            importProcess.execute(
+                    null, 
+                    diff, 
+                    refWsName, 
+                    null, 
+                    diff.getName().toString(),
+                    diff.getCoordinateReferenceSystem(), 
+                    null, 
+                    defaultStyle);
 
             soilSealingIndexResult.setDiffImageName(refWsName + ":" + diff.getName().toString());
         }

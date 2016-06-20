@@ -131,6 +131,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             @DescribeParameter(name = "classes", collectionType = Integer.class, min = 0, description = "The domain of the classes used in input rasters") Set<Integer> classes,
             @DescribeParameter(name = "geocoderLayer", description = "Name of the geocoder layer, optionally fully qualified (workspace:name)") String geocoderLayer,
             @DescribeParameter(name = "geocoderPopulationLayer", description = "Name of the geocoder population layer, optionally fully qualified (workspace:name)") String geocoderPopulationLayer,
+            @DescribeParameter(name = "waterBodiesMaskLayer", min = 0, description = "Name of the water bodies mask layer, optionally fully qualified (workspace:name)") String waterBodiesMaskLayer,
             @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
@@ -155,6 +156,8 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                     + " / " + geocoderPopulationLayer + ")");
         }
 
+        FeatureTypeInfo waterBodiesMaskReference = catalog.getFeatureTypeByName(waterBodiesMaskLayer);
+        
         /*
          * if (admUnits == null || admUnits.isEmpty()) { throw new WPSException("No Administrative Unit has been specified."); }
          */
@@ -194,10 +197,23 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // the geometries and population values.
             // //////////////////////////////////////
             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
+            final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
+                    .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+            
+            // Apply Mask if necessary
+            Geometry mask = null;
+            if (waterBodiesMaskReference != null) {
+                mask = getWBodiesMask(waterBodiesMaskReference, mask);
+                
+                if (mask != null) {
+                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, true);
+                }
+            }
+            
             if (admUnits != null && !admUnits.isEmpty()) {
                 prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
                         geoCodingReference, populationReference, municipalities, rois, populations,
-                        referenceYear, currentYear, referenceCrs, true);
+                        referenceYear, currentYear, referenceCrs, true, mask);
             } else {
                 populations = null;
                 // handle Region Of Interest
@@ -231,10 +247,12 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                                 "The provided ROI does not intersect the reference data BBOX: ",
                                 roi.toText());
                     }
-                    final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
-                            .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                    
                     roi.setSRID(4326);
                     roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, true);
+                    if (mask != null) {
+                        roi = roi.intersection(mask);
+                    }
                     rois.add(roi);
                 }
             }

@@ -21,8 +21,6 @@ import java.util.logging.Logger;
 
 import javax.media.jai.RenderedOp;
 
-import net.sf.json.JSONSerializer;
-
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -73,6 +71,8 @@ import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.Polygon;
+
+import net.sf.json.JSONSerializer;
 
 /**
  * Middleware process collecting the inputs for {@link UrbanGridProcess} indexes.
@@ -237,6 +237,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "geocoderLayer", min = 1, description = "Name of the geocoder layer, optionally fully qualified (workspace:name)") String geocoderLayer,
             @DescribeParameter(name = "geocoderPopulationLayer", min = 1, description = "Name of the geocoder population layer, optionally fully qualified (workspace:name)") String geocoderPopulationLayer,
             @DescribeParameter(name = "imperviousnessLayer", min = 1, description = "Name of the imperviousness layer, optionally fully qualified (workspace:name)") String imperviousnessLayer,
+            @DescribeParameter(name = "waterBodiesMaskLayer", min = 0, description = "Name of the water bodies mask layer, optionally fully qualified (workspace:name)") String waterBodiesMaskLayer,
             @DescribeParameter(name = "admUnits", min = 0, description = "Comma Separated list of Administrative Units") String admUnits,
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
@@ -272,6 +273,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             throw new WPSException(
                     "Could not find imperviousness reference layer (" + imperviousnessLayer + ")");
         }
+
+        FeatureTypeInfo waterBodiesMaskReference = catalog.getFeatureTypeByName(waterBodiesMaskLayer);
 
         /*
          * if (admUnits == null || admUnits.isEmpty()) { throw new WPSException("No Administrative Unit has been specified."); }
@@ -338,11 +341,25 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             /**
              * Parse Geometries and Reproject to Reference CRS
              */
+
             final CoordinateReferenceSystem referenceCrs = ciReference.getCRS();
+            final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
+                    .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+
+            // Apply Mask if necessary
+            Geometry mask = null;
+            if (waterBodiesMaskReference != null) {
+                mask = getWBodiesMask(waterBodiesMaskReference, mask);
+                
+                if (mask != null) {
+                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, toRasterSpace);
+                }
+            }
+            
             if (admUnits != null && !admUnits.isEmpty()) {
                 prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
                         geoCodingReference, populationReference, municipalities, rois, populations,
-                        referenceYear, currentYear, referenceCrs, toRasterSpace);
+                        referenceYear, currentYear, referenceCrs, toRasterSpace, mask);
             } else {
                 populations = null;
                 // handle Region Of Interest
@@ -376,10 +393,12 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                                 "The provided ROI does not intersect the reference data BBOX: ",
                                 roi.toText());
                     }
-                    final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
-                            .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                    
                     roi.setSRID(4326);
                     roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
+                    if (mask != null) {
+                        roi = roi.intersection(mask);
+                    }
                     rois.add(roi);
                 }
             }

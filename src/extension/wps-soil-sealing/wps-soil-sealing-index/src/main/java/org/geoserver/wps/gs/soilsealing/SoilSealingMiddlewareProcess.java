@@ -5,6 +5,8 @@ import java.awt.geom.NoninvertibleTransformException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -13,14 +15,23 @@ import org.geoserver.config.GeoServer;
 import org.geoserver.wps.WPSException;
 import org.geoserver.wps.gs.soilsealing.SoilSealingAdministrativeUnit.AuSelectionType;
 import org.geotools.coverage.grid.GridGeometry2D;
+import org.geotools.data.DefaultTransaction;
+import org.geotools.data.FeatureReader;
+import org.geotools.data.Query;
+import org.geotools.data.Transaction;
 import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.geometry.Envelope2D;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.geometry.jts.ReferencedEnvelope;
+import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.process.gs.GSProcess;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.transform.AffineTransform2D;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
+import org.geotools.util.logging.Logging;
+import org.opengis.feature.Feature;
+import org.opengis.feature.simple.SimpleFeature;
+import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.filter.Filter;
 import org.opengis.filter.FilterFactory;
 import org.opengis.geometry.MismatchedDimensionException;
@@ -41,16 +52,22 @@ import com.vividsolutions.jts.simplify.DouglasPeuckerSimplifier;
 public abstract class SoilSealingMiddlewareProcess implements GSProcess {
 
     public static final int DEGREES_TO_METER_RATIO = 111128;
+    
+    private final static Logger LOGGER = Logging.getLogger(SoilSealingMiddlewareProcess.class);
+
     /**
      * Geometry and Filter Factories
      */
     protected static final FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
-    protected static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel());
-    
+
+    protected static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(
+            new PrecisionModel());
+
     /**
      * The GeoServer Catalog
      */
     protected Catalog catalog;
+
     /**
      * The GeoServer Bean
      */
@@ -64,7 +81,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      */
     public SoilSealingMiddlewareProcess(Catalog catalog, GeoServer geoserver) {
         super();
-        
+
         this.catalog = catalog;
         this.geoserver = geoserver;
     }
@@ -83,7 +100,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @param populations
      * @param referenceYear
      * @param currentYear
-     * @param referenceCrs 
+     * @param referenceCrs
+     * @param mask
      * @throws IOException
      * @throws NoSuchAuthorityCodeException
      * @throws FactoryException
@@ -94,112 +112,136 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             AuSelectionType admUnitSelectionType, CoverageInfo ciReference,
             FeatureTypeInfo geoCodingReference, FeatureTypeInfo populationReference,
             List<String> municipalities, List<Geometry> rois, List<List<Integer>> populations,
-            final String referenceYear, final String currentYear, 
-            CoordinateReferenceSystem referenceCrs, boolean toRasterSpace) throws IOException,
-            NoSuchAuthorityCodeException, FactoryException, TransformException,
+            final String referenceYear, final String currentYear,
+            CoordinateReferenceSystem referenceCrs, boolean toRasterSpace, Geometry mask)
+            throws IOException, NoSuchAuthorityCodeException, FactoryException, TransformException,
             NoninvertibleTransformException {
         // extract administrative units and geometries
         // //
         // GRID TO WORLD preparation from reference
         // //
-        final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference.getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
-        
+        final AffineTransform gridToWorldCorner = (AffineTransform) ((GridGeometry2D) ciReference
+                .getGrid()).getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+
         for (String au : admUnits.split(",")) {
-            SoilSealingAdministrativeUnit sAu = new SoilSealingAdministrativeUnit(au, geoCodingReference, populationReference);
+            SoilSealingAdministrativeUnit sAu = new SoilSealingAdministrativeUnit(au,
+                    geoCodingReference, populationReference);
             if (admUnitSelectionType == AuSelectionType.AU_LIST) {
                 Geometry roi = null;
-                int srID=0;
+                int srID = 0;
                 int referencePopulation = 0;
                 int currentPopulation = 0;
                 switch (sAu.getType()) {
-                    case MUNICIPALITY :
-                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
-                                gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
-                        if(hasPop){
-                        	municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                case MUNICIPALITY:
+                    boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+                            gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace,
+                            mask);
+                    if (hasPop) {
+                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                    }
+                    break;
+                case DISTRICT:
+                    for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
+                        Geometry newRoi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                        if (mask != null) {
+                            newRoi = newRoi.intersection(mask);
                         }
-                        break;
-                    case DISTRICT:
-                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                        {
+                        
+                        if (roi == null) {
+                            roi = newRoi;
+                            srID = roi.getSRID();
+                        } else {
+                            roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
+                        }
+                        if (ssAu.getPopulation() != null) {
+                            if (ssAu.getPopulation().get(referenceYear) != null)
+                                referencePopulation += ssAu.getPopulation().get(referenceYear);
+                            if (nowFilter != null && ssAu.getPopulation().get(currentYear) != null)
+                                currentPopulation += ssAu.getPopulation().get(currentYear);
+                        }
+                    }
+                    roi.setSRID(srID);
+                    rois.add(roi);
+                    populations.get(0).add(referencePopulation);
+                    if (nowFilter != null)
+                        populations.get(1).add(currentPopulation);
+                    municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                    break;
+                case REGION:
+                    for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
+                        for (SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
+                            Geometry newRoi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                            if (mask != null) {
+                                newRoi = newRoi.intersection(mask);
+                            }
+                            
                             if (roi == null) {
-                                    roi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
-                                    srID = roi.getSRID();
-                                }
-                            else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
-                            if (ssAu.getPopulation() != null) {
-                                if (ssAu.getPopulation().get(referenceYear) != null) referencePopulation += ssAu.getPopulation().get(referenceYear);
-                                if (nowFilter != null && ssAu.getPopulation().get(currentYear) != null) currentPopulation += ssAu.getPopulation().get(currentYear);
+                                roi = newRoi;
+                                srID = roi.getSRID();
+                            } else {
+                                roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
+                            }
+                            
+                            if (sssAu.getPopulation() != null) {
+                                if (sssAu.getPopulation().get(referenceYear) != null)
+                                    referencePopulation += sssAu.getPopulation().get(referenceYear);
+                                if (nowFilter != null
+                                        && sssAu.getPopulation().get(currentYear) != null)
+                                    currentPopulation += sssAu.getPopulation().get(currentYear);
                             }
                         }
-                        roi.setSRID(srID);
-                        rois.add(roi);
-                        populations.get(0).add(referencePopulation);
-                        if (nowFilter != null) populations.get(1).add(currentPopulation);
-                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                        break;
-                    case REGION:
-                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                        {
-                            for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
-                                if (roi == null){
-                                    roi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
-                                    srID = roi.getSRID();
-                                }
-                                else roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace))).union();
-                                if (sssAu.getPopulation() != null) {
-                                    if (sssAu.getPopulation().get(referenceYear) != null) referencePopulation += sssAu.getPopulation().get(referenceYear);
-                                    if (nowFilter != null && sssAu.getPopulation().get(currentYear) != null) currentPopulation += sssAu.getPopulation().get(currentYear);
-                                }
-                            }
-                        }
-                        roi.setSRID(srID);
-                        rois.add(roi);
-                        populations.get(0).add(referencePopulation);
-                        if (nowFilter != null) populations.get(1).add(currentPopulation);
-                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                        break;
-                    default:
-                        break;
+                    }
+                    roi.setSRID(srID);
+                    rois.add(roi);
+                    populations.get(0).add(referencePopulation);
+                    if (nowFilter != null)
+                        populations.get(1).add(currentPopulation);
+                    municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                    break;
+                default:
+                    break;
                 }
             } else if (admUnitSelectionType == AuSelectionType.AU_SUBS) {
                 switch (sAu.getType()) {
-                    case MUNICIPALITY :
-                        boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace);
-                        if(hasPop){
-                        	municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                case MUNICIPALITY:
+                    boolean hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+                            gridToWorldCorner, referenceCrs, rois, populations, sAu, toRasterSpace, mask);
+                    if (hasPop) {
+                        municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                    }
+                    // municipalities.add(sAu.getName() + " - " + sAu.getParent());
+                    break;
+                case DISTRICT:
+                    for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
+                        hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+                                gridToWorldCorner, referenceCrs, rois, populations, ssAu,
+                                toRasterSpace, mask);
+                        if (hasPop) {
+                            municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
                         }
-                        //municipalities.add(sAu.getName() + " - " + sAu.getParent());
-                        break;
-                    case DISTRICT:
-                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                        {
-                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, ssAu, toRasterSpace);
-                            if(hasPop){
-                            	municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
+                        // municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
+                    }
+                    break;
+                case REGION:
+                    for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
+                        for (SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
+                            hasPop = populateInputLists(nowFilter, referenceYear, currentYear,
+                                    gridToWorldCorner, referenceCrs, rois, populations, sssAu,
+                                    toRasterSpace, mask);
+                            if (hasPop) {
+                                municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
                             }
-                            //municipalities.add(ssAu.getName() + " - " + ssAu.getParent());
+                            // municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
                         }
-                        break;
-                    case REGION:
-                        for(SoilSealingAdministrativeUnit ssAu : sAu.getSubs())
-                        {
-                            for(SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
-                                hasPop = populateInputLists(nowFilter, referenceYear, currentYear, gridToWorldCorner, referenceCrs, rois, populations, sssAu, toRasterSpace);
-                                if(hasPop){
-                                	municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
-                                }
-                                //municipalities.add(sssAu.getName() + " - " + sssAu.getParent());
-                            }
-                        }
-                        break;
-                    default:
-                        break;
+                    }
+                    break;
+                default:
+                    break;
                 }
             }
         }
     }
-    
+
     /**
      * 
      * @param values
@@ -219,7 +261,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 i++;
             }
         }
-        
+
         return values;
     }
 
@@ -232,7 +274,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @param rois
      * @param populations
      * @param sAu
-     * @param toRasterSpace 
+     * @param toRasterSpace
+     * @param mask
      * @throws NoSuchAuthorityCodeException
      * @throws FactoryException
      * @throws TransformException
@@ -241,19 +284,29 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
     protected boolean populateInputLists(Filter nowFilter, final String referenceYear,
             final String currentYear, final AffineTransform gridToWorldCorner,
             final CoordinateReferenceSystem referenceCrs, List<Geometry> rois,
-            List<List<Integer>> populations, SoilSealingAdministrativeUnit sAu, 
-            boolean toRasterSpace)
-            throws NoSuchAuthorityCodeException, FactoryException, TransformException,
-            NoninvertibleTransformException {
+            List<List<Integer>> populations, SoilSealingAdministrativeUnit sAu,
+            boolean toRasterSpace, Geometry mask) throws NoSuchAuthorityCodeException,
+            FactoryException, TransformException, NoninvertibleTransformException {
         boolean hasPop = true;
         if (sAu.getPopulation() != null) {
-            if (sAu.getPopulation().get(referenceYear) != null) {populations.get(0).add(sAu.getPopulation().get(referenceYear));}
-            else{hasPop = false;};
-            if (nowFilter != null && sAu.getPopulation().get(currentYear) != null){ populations.get(1).add(sAu.getPopulation().get(currentYear));}
-            else if(nowFilter != null){hasPop = false;}
+            if (sAu.getPopulation().get(referenceYear) != null) {
+                populations.get(0).add(sAu.getPopulation().get(referenceYear));
+            } else {
+                hasPop = false;
+            }
+            ;
+            if (nowFilter != null && sAu.getPopulation().get(currentYear) != null) {
+                populations.get(1).add(sAu.getPopulation().get(currentYear));
+            } else if (nowFilter != null) {
+                hasPop = false;
+            }
         }
-        if(hasPop){
-        	rois.add(toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace));
+        if (hasPop) {
+            Geometry roi = toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner,toRasterSpace);
+            if (mask != null) {
+                roi = roi.intersection(mask);
+            }
+            rois.add(roi);
         }
         return hasPop;
     }
@@ -270,13 +323,19 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @throws TransformException
      * @throws NoninvertibleTransformException
      */
-    protected Geometry toReferenceCRS(Geometry theGeom, CoordinateReferenceSystem referenceCrs, AffineTransform gridToWorldCorner, boolean toRasterSpace) throws NoSuchAuthorityCodeException, FactoryException, MismatchedDimensionException, TransformException, NoninvertibleTransformException {
+    protected Geometry toReferenceCRS(Geometry theGeom, CoordinateReferenceSystem referenceCrs,
+            AffineTransform gridToWorldCorner, boolean toRasterSpace)
+            throws NoSuchAuthorityCodeException, FactoryException, MismatchedDimensionException,
+            TransformException, NoninvertibleTransformException {
         // check if we need to reproject the ROI from WGS84 (standard in the input) to the reference CRS
-        if (theGeom.getSRID() <= 0) theGeom.setSRID(CRS.lookupEpsgCode(referenceCrs, true));
-        final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:"+theGeom.getSRID(), true);
+        if (theGeom.getSRID() <= 0)
+            theGeom.setSRID(CRS.lookupEpsgCode(referenceCrs, true));
+        final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:" + theGeom.getSRID(), true);
         if (CRS.equalsIgnoreMetadata(referenceCrs, targetCrs)) {
-            Geometry rasterSpaceGeometry = JTS.transform(theGeom, new AffineTransform2D(gridToWorldCorner.createInverse()));
-            return (toRasterSpace ? DouglasPeuckerSimplifier.simplify(rasterSpaceGeometry, 1) : theGeom);
+            Geometry rasterSpaceGeometry = JTS.transform(theGeom,
+                    new AffineTransform2D(gridToWorldCorner.createInverse()));
+            return (toRasterSpace ? DouglasPeuckerSimplifier.simplify(rasterSpaceGeometry, 1)
+                    : theGeom);
         } else {
             // reproject
             MathTransform transform = CRS.findMathTransform(targetCrs, referenceCrs, true);
@@ -288,10 +347,12 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 roiPrj = JTS.transform(theGeom, transform);
                 roiPrj.setSRID(CRS.lookupEpsgCode(referenceCrs, true));
             }
-            return (toRasterSpace ? JTS.transform(roiPrj, ProjectiveTransform.create(gridToWorldCorner).inverse()) : roiPrj);
+            return (toRasterSpace
+                    ? JTS.transform(roiPrj, ProjectiveTransform.create(gridToWorldCorner).inverse())
+                    : roiPrj);
         }
     }
-    
+
     /**
      * Utility method for creating the GridGeometry for reading only the active part of the image
      * 
@@ -353,7 +414,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     roiBuffer = roiUnion.buffer(buffer);
                 } else {
                     envelope.expandBy(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
-                    roiBuffer = roiUnion.buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
+                    roiBuffer = roiUnion
+                            .buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
                 }
 
                 if (union == null) {
@@ -421,5 +483,44 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
         }
 
         return gridROI;
+    }
+    
+    /**
+     * @param waterBodiesMaskReference
+     * @param mask
+     * @return 
+     * @throws IOException
+     */
+    protected Geometry getWBodiesMask(FeatureTypeInfo waterBodiesMaskReference, Geometry mask)
+            throws IOException {
+        FeatureReader<SimpleFeatureType, SimpleFeature> ftReader = null;
+        Transaction transaction = new DefaultTransaction();
+        try {
+            final JDBCDataStore ds = (JDBCDataStore) waterBodiesMaskReference.getStore().getDataStore(null);
+            
+            ftReader = ds.getFeatureReader(Query.ALL, transaction);
+
+            while (ftReader.hasNext()) {
+                Feature feature = ftReader.next();
+                if (mask == null) {
+                    mask = (Geometry) feature.getDefaultGeometryProperty().getValue();
+                } else {
+                    mask = mask.union((Geometry) feature.getDefaultGeometryProperty().getValue());
+                }
+                break;
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);
+            mask = null;
+        } finally {
+            if (ftReader != null) {
+                ftReader.close();
+            }
+
+            transaction.commit();
+            transaction.close();
+        }
+        
+        return mask;
     }
 }

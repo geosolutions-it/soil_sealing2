@@ -21,6 +21,8 @@ import java.util.logging.Logger;
 
 import javax.media.jai.RenderedOp;
 
+import net.sf.json.JSONSerializer;
+
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -71,8 +73,6 @@ import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.Polygon;
-
-import net.sf.json.JSONSerializer;
 
 /**
  * Middleware process collecting the inputs for {@link UrbanGridProcess} indexes.
@@ -338,6 +338,57 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     break;
             }
 
+         // //////////////////////////////////////////////////////////////////////
+            // Logging to WFS ...
+            // //////////////////////////////////////////////////////////////////////
+            /**
+             * Convert the spread attributes into a FeatureType
+             */
+            List<FeatureAttribute> attributes = new ArrayList<FeatureAttribute>();
+
+            attributes.add(new FeatureAttribute("ftUUID", uuid.toString()));
+            attributes.add(new FeatureAttribute("runBegin", new Date()));
+            attributes.add(new FeatureAttribute("runEnd", new Date()));
+            attributes.add(new FeatureAttribute("itemStatus", "RUNNING"));
+            attributes.add(new FeatureAttribute("itemStatusMessage", "Instrumented by Server"));
+            attributes.add(new FeatureAttribute("referenceName", referenceName));
+            attributes.add(new FeatureAttribute("defaultStyle", defaultStyle));
+            attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
+            attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
+            attributes.add(new FeatureAttribute("index", soilSealingIndexType.getDescription()));
+            attributes.add(new FeatureAttribute("subindex", 
+                    (subIndex != null ? 
+                            (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
+                                    SoilSealingSubIndexType.translate(subIndex).getDescription() + (radius>0?","+radius+"m":"") : 
+                                    subIndex + (radius>0?","+radius+"m":"")) : 
+                            "")));
+            attributes.add(new FeatureAttribute("classes", ""));
+            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
+            attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
+            attributes.add(new FeatureAttribute("wsName", wsName));
+            attributes.add(new FeatureAttribute("soilIndex", ""));
+            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
+            attributes.add(new FeatureAttribute("jobUid", jobUid));
+            attributes.add(new FeatureAttribute("layerName", ""));
+
+            features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()), ciReference.getCRS(), typeName, attributes, null);
+
+            if (features == null || features.isEmpty()) {
+                throw new ProcessException(
+                        "There was an error while converting attributes into FeatureType.");
+            }
+
+            /**
+             * LOG into the DB
+             */
+            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true, new NullProgressListener());
+
+            if (features == null || features.isEmpty()) {
+                throw new ProcessException(
+                        "There was an error while logging FeatureType into the storage.");
+            }
+            
             /**
              * Parse Geometries and Reproject to Reference CRS
              */
@@ -466,57 +517,6 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 if (nowCoverage == null) {
                     throw new WPSException("Input Current Coverage not found");
                 }
-            }
-
-            // //////////////////////////////////////////////////////////////////////
-            // Logging to WFS ...
-            // //////////////////////////////////////////////////////////////////////
-            /**
-             * Convert the spread attributes into a FeatureType
-             */
-            List<FeatureAttribute> attributes = new ArrayList<FeatureAttribute>();
-
-            attributes.add(new FeatureAttribute("ftUUID", uuid.toString()));
-            attributes.add(new FeatureAttribute("runBegin", new Date()));
-            attributes.add(new FeatureAttribute("runEnd", new Date()));
-            attributes.add(new FeatureAttribute("itemStatus", "RUNNING"));
-            attributes.add(new FeatureAttribute("itemStatusMessage", "Instrumented by Server"));
-            attributes.add(new FeatureAttribute("referenceName", referenceName));
-            attributes.add(new FeatureAttribute("defaultStyle", defaultStyle));
-            attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
-            attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
-            attributes.add(new FeatureAttribute("index", soilSealingIndexType.getDescription()));
-            attributes.add(new FeatureAttribute("subindex", 
-                    (subIndex != null ? 
-                            (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
-                                    SoilSealingSubIndexType.translate(subIndex).getDescription() + (radius>0?","+radius+"m":"") : 
-                                    subIndex + (radius>0?","+radius+"m":"")) : 
-                            "")));
-            attributes.add(new FeatureAttribute("classes", ""));
-            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
-            attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
-            attributes.add(new FeatureAttribute("wsName", wsName));
-            attributes.add(new FeatureAttribute("soilIndex", ""));
-            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
-            attributes.add(new FeatureAttribute("jobUid", jobUid));
-            attributes.add(new FeatureAttribute("layerName", ""));
-
-            features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()), ciReference.getCRS(), typeName, attributes, null);
-
-            if (features == null || features.isEmpty()) {
-                throw new ProcessException(
-                        "There was an error while converting attributes into FeatureType.");
-            }
-
-            /**
-             * LOG into the DB
-             */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
-            features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true, new NullProgressListener());
-
-            if (features == null || features.isEmpty()) {
-                throw new ProcessException(
-                        "There was an error while logging FeatureType into the storage.");
             }
 
             LOGGER.fine(++gCount + ") S" + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()));

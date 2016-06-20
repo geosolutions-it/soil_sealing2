@@ -192,6 +192,96 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             final String currentYear = (nowFilter == null ? null
                     : ((IsEqualsToImpl) nowFilter).getExpression2().toString().substring(0, 4));
 
+         // ///////////////////////////////////////////////////////////////
+            // Preparing classes for index 3-4
+            // ///////////////////////////////////////////////////////////////
+            if (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.MARGINAL_LAND_TAKE || 
+                SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.URBAN_SPRAWL) {
+                classes = new TreeSet<Integer>();
+
+                // Selection of the CLC level
+                int indexValue = referenceName.indexOf("_L");
+
+                int clcLevel = 3;
+                if (indexValue > 0) {
+                    String substring = referenceName.substring(indexValue + 2, indexValue + 3);
+
+                    clcLevel = Integer.parseInt(substring);
+                }
+
+                switch (clcLevel) {
+                case 1:
+                    classes.add(4);
+                    break;
+                case 2:
+                    classes.add(10);
+                    classes.add(11);
+                    classes.add(14);
+                    break;
+                case 3:
+                    classes.add(1);
+                    classes.add(7);
+                    classes.add(8);
+                    classes.add(10);
+                    classes.add(19);
+                    classes.add(22);
+                    classes.add(31);
+                    classes.add(39);
+                    classes.add(40);
+                    break;
+                default:
+                    throw new ProcessException("Wrong clc level");
+                }
+            }
+
+            // //////////////////////////////////////////////////////////////////////
+            // Logging to WFS ...
+            // //////////////////////////////////////////////////////////////////////
+            /**
+             * Convert the spread attributes into a FeatureType
+             */
+            List<FeatureAttribute> attributes = new ArrayList<FeatureAttribute>();
+
+            attributes.add(new FeatureAttribute("ftUUID", uuid.toString()));
+            attributes.add(new FeatureAttribute("runBegin", new Date()));
+            attributes.add(new FeatureAttribute("runEnd", new Date()));
+            attributes.add(new FeatureAttribute("itemStatus", "RUNNING"));
+            attributes.add(new FeatureAttribute("itemStatusMessage", "Instrumented by Server"));
+            attributes.add(new FeatureAttribute("referenceName", referenceName));
+            attributes.add(new FeatureAttribute("defaultStyle", defaultStyle));
+            attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
+            attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
+            attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
+            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? SoilSealingSubIndexType.translate(subIndex).getDescription() : subIndex) : "")));
+            attributes.add(new FeatureAttribute("classes", (classes != null ? Arrays.toString(classes.toArray(new Integer[1])) : "")));
+            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
+            attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
+            attributes.add(new FeatureAttribute("wsName", wsName));
+            attributes.add(new FeatureAttribute("soilIndex", ""));
+            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
+            attributes.add(new FeatureAttribute("jobUid", jobUid));
+            attributes.add(new FeatureAttribute("layerName", ""));
+
+            features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()),
+                    ciReference.getCRS(), typeName, attributes, null);
+
+            if (features == null || features.isEmpty()) {
+                throw new ProcessException(
+                        "There was an error while converting attributes into FeatureType.");
+            }
+
+            /**
+             * LOG into the DB
+             */
+            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true,
+                    new NullProgressListener());
+
+            if (features == null || features.isEmpty()) {
+                throw new ProcessException(
+                        "There was an error while logging FeatureType into the storage.");
+            }
+            
             // //////////////////////////////////////
             // Scan the geocoding layers and prepare
             // the geometries and population values.
@@ -316,96 +406,6 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                 if (nowCoverage == null) {
                     throw new WPSException("Input Current Coverage not found");
                 }
-            }
-
-            // ///////////////////////////////////////////////////////////////
-            // Preparing classes for index 3-4
-            // ///////////////////////////////////////////////////////////////
-            if (SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.MARGINAL_LAND_TAKE || 
-                SoilSealingIndexType.translateIndex(index) == SoilSealingIndexType.URBAN_SPRAWL) {
-                classes = new TreeSet<Integer>();
-
-                // Selection of the CLC level
-                int indexValue = referenceName.indexOf("_L");
-
-                int clcLevel = 3;
-                if (indexValue > 0) {
-                    String substring = referenceName.substring(indexValue + 2, indexValue + 3);
-
-                    clcLevel = Integer.parseInt(substring);
-                }
-
-                switch (clcLevel) {
-                case 1:
-                    classes.add(4);
-                    break;
-                case 2:
-                    classes.add(10);
-                    classes.add(11);
-                    classes.add(14);
-                    break;
-                case 3:
-                    classes.add(1);
-                    classes.add(7);
-                    classes.add(8);
-                    classes.add(10);
-                    classes.add(19);
-                    classes.add(22);
-                    classes.add(31);
-                    classes.add(39);
-                    classes.add(40);
-                    break;
-                default:
-                    throw new ProcessException("Wrong clc level");
-                }
-            }
-
-            // //////////////////////////////////////////////////////////////////////
-            // Logging to WFS ...
-            // //////////////////////////////////////////////////////////////////////
-            /**
-             * Convert the spread attributes into a FeatureType
-             */
-            List<FeatureAttribute> attributes = new ArrayList<FeatureAttribute>();
-
-            attributes.add(new FeatureAttribute("ftUUID", uuid.toString()));
-            attributes.add(new FeatureAttribute("runBegin", new Date()));
-            attributes.add(new FeatureAttribute("runEnd", new Date()));
-            attributes.add(new FeatureAttribute("itemStatus", "RUNNING"));
-            attributes.add(new FeatureAttribute("itemStatusMessage", "Instrumented by Server"));
-            attributes.add(new FeatureAttribute("referenceName", referenceName));
-            attributes.add(new FeatureAttribute("defaultStyle", defaultStyle));
-            attributes.add(new FeatureAttribute("referenceFilter", referenceFilter.toString()));
-            attributes.add(new FeatureAttribute("nowFilter", (nowFilter != null ? nowFilter.toString() : "")));
-            attributes.add(new FeatureAttribute("index", SoilSealingIndexType.translateIndex(index).getDescription()));
-            attributes.add(new FeatureAttribute("subindex", (subIndex != null ? (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? SoilSealingSubIndexType.translate(subIndex).getDescription() : subIndex) : "")));
-            attributes.add(new FeatureAttribute("classes", (classes != null ? Arrays.toString(classes.toArray(new Integer[1])) : "")));
-            attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
-            attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
-            attributes.add(new FeatureAttribute("wsName", wsName));
-            attributes.add(new FeatureAttribute("soilIndex", ""));
-            attributes.add(new FeatureAttribute("jcuda", (jcuda ? "[CUDA]" : "[JAVA]")));
-            attributes.add(new FeatureAttribute("jobUid", jobUid));
-            attributes.add(new FeatureAttribute("layerName", ""));
-
-            features = toFeatureProcess.execute(JTS.toGeometry(ciReference.getNativeBoundingBox()),
-                    ciReference.getCRS(), typeName, attributes, null);
-
-            if (features == null || features.isEmpty()) {
-                throw new ProcessException(
-                        "There was an error while converting attributes into FeatureType.");
-            }
-
-            /**
-             * LOG into the DB
-             */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
-            features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true,
-                    new NullProgressListener());
-
-            if (features == null || features.isEmpty()) {
-                throw new ProcessException(
-                        "There was an error while logging FeatureType into the storage.");
             }
 
             // ///////////////////////////////////////////////////////////////

@@ -281,6 +281,7 @@ public class UrbanGridProcess implements GSProcess {
             }
         case MODEL_URBAN_DEVELOPMENT:
         case NEW_URBANIZATION:
+        case NEW_ECO_CORRIDOR:
             area = true;
             break;
         default:

@@ -119,7 +119,8 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
         LAND_TAKE(9, "Land Take", "LandTake"), 
         POTENTIAL_LOSS_FOOD_SUPPLY(10, "Potential Loss of Food Supply", "LossFoodSupply"), 
         MODEL_URBAN_DEVELOPMENT(11, "Model of Urban Development", "UrbanDevel"), 
-        NEW_URBANIZATION(12, "New Urbanization", "NewUrbaninzation");
+        NEW_URBANIZATION(12, "New Urbanization", "NewUrbaninzation"),
+        NEW_ECO_CORRIDOR(13, "New Ecological Corridor", "NewEcoCorridor");
 
         private Integer idx;
 
@@ -359,9 +360,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("subindex", 
                     (subIndex != null ? 
                             (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
-                                    SoilSealingSubIndexType.translate(subIndex).getDescription() + (radius>0?","+radius+"m":"") : 
-                                    subIndex + (radius>0?","+radius+"m":"")) : 
-                            "")));
+                                    SoilSealingSubIndexType.translate(subIndex).getDescription() : 
+                                    subIndex) : 
+                            "")+(radius>0?" "+radius+"m":"")));
             attributes.add(new FeatureAttribute("classes", ""));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
@@ -472,7 +473,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
 
             // Creation of a GridGeometry object used for forcing the reader to
             // read only the active zones
-            final Double buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0.0);
+            final Double buffer = (
+                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
+                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR? radius : 0.0);
             final boolean mergeGeometries = 
                     (soilSealingIndexType == SoilSealingIndexType.URBAN_DISPERSION || 
                      soilSealingIndexType == SoilSealingIndexType.EDGE_DENSITY || 
@@ -618,10 +621,13 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             if (
                 soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
                 soilSealingIndexType == SoilSealingIndexType.LAND_TAKE || 
-                soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
+                soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
+                soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR) {
                 
-                double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
-                        || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+                double[] background = (
+                        soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
+                        soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ||
+                        soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR
                                 ? new double[] { FRAG_NODATA } : new double[] { NODATA });
                 
                 rasters = buildRasterMap(soilSealingIndexResult, indexValue, referenceCoverage, wsName, defaultStyle, background[0]);

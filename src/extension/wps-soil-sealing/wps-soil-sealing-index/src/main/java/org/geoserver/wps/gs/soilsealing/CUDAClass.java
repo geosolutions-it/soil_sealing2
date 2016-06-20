@@ -2628,8 +2628,14 @@ public class CUDAClass {
         return wheatLoss;
     }
 
-    public static double[] newUrbanization(List<CUDABean> beans, boolean rural, int ray_pixels,
-            int i, int j) {
+    public static double[] newUrbanization(
+            List<CUDABean> beans, 
+            boolean rural, 
+            int ray_pixels,
+            int i, 
+            int j,
+            boolean urbanization
+        ) {
         // int j = 0; // fictitious admin unit
         // int i = 0; // fictitious year
         int WIDTH = beans.get(j).width;
@@ -2656,7 +2662,11 @@ public class CUDAClass {
         byte[] ROI = beans.get(j).roi;
 
         for (int ii = 0; ii < map_len; ii++) {
-            fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 0 : 1));
+            if (urbanization) {
+                fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 0 : 1));
+            } else {
+                fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 1 : 0));
+            }
         }
         beans.get(j).setCurrentImage(fictitious_curImage);
 

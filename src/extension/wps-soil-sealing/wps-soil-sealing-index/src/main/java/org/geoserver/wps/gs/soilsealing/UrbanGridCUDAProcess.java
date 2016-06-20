@@ -150,6 +150,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case FRAGMENTATION:
         case MODEL_URBAN_DEVELOPMENT:
         case NEW_URBANIZATION:
+        case NEW_ECO_CORRIDOR:
             //if (!subIndexA) {
                 inRasterSpace = false;
             //}
@@ -218,7 +219,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
-            int buffer = (soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ? radius : 0);
+            int buffer = (
+                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
+                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR ? radius : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
@@ -226,7 +229,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
                 // Populate it with Reference coverage parameters
                 try {
-                    populateBean(bean, true, referenceCoverage, geo, null, buffer);
+                    populateBean(bean, true, referenceCoverage, geo, null, buffer, soilSealingIndexType);
 
                     // Set the population values if needed
                     if (populations != null) {
@@ -236,7 +239,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     
                     // Do the same for the Current Coverage if present
                     if (nowCoverage != null) {
-                        populateBean(bean, false, nowCoverage, geo, null, buffer);
+                        populateBean(bean, false, nowCoverage, geo, null, buffer, soilSealingIndexType);
                         // Set the population values if needed
                         if (populations != null) {
                             Integer popCur = populations.get(1).get(counter);
@@ -276,7 +279,8 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         // For index 8 calculate the final Image
         if (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
                 || soilSealingIndexType == SoilSealingIndexType.LAND_TAKE
-                || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
+                || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+                || soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR) {
 
             LOGGER.fine("rural=" + rural + " -- radius/buffer=" + radius + " [m]");
 
@@ -310,8 +314,10 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
 
             // Mosaic of the images
-            double[] background = (soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION
-                    || soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION
+            double[] background = (
+                    soilSealingIndexType == SoilSealingIndexType.FRAGMENTATION || 
+                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION ||
+                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR
                             ? new double[] { SoilSealingImperviousnessProcess.FRAG_NODATA } : 
                                 new double[] { SoilSealingImperviousnessProcess.NODATA });
             RenderedImage finalRef = MosaicDescriptor.create(refImgs,
@@ -597,6 +603,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             }
             return result;
         case NEW_URBANIZATION: // LABEL = "Simulate new urbanization", must be run after fragmentation?
+        case NEW_ECO_CORRIDOR: // LABEL = "Simulate new ecological corridor", must be run after fragmentation?
             int i = 0; // fictitious year
             for (int j = 0; j < n_adm_units; j++) {
                 // NOTE:
@@ -607,10 +614,12 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 // I have to wrap any following class in a dedicated class for new urbanization process
                 // in order to calculate the required specific inputs!!
                 boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-                if (isFeasible)
-                    result[j][i] = CUDAClass.newUrbanization(beans, rural, ray_pixels, i, j);
-                else
+                if (isFeasible) {
+                    result[j][i] = 
+                    CUDAClass.newUrbanization(beans, rural, ray_pixels, i, j, soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION);
+                } else {
                     result[j][i] = new double[] { Double.NaN };
+                }
             }
             return result;
         default:
@@ -627,12 +636,13 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @param coverage
      * @param geo
      * @param transform
+     * @param soilSealingIndexType 
      * @throws IOException
      * @throws MismatchedDimensionException
      * @throws TransformException
      */
     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
-            Geometry geo, MathTransform transform, int buffer)
+            Geometry geo, MathTransform transform, int buffer, SoilSealingIndexType soilSealingIndexType)
             throws IOException, MismatchedDimensionException, TransformException {
 
         RenderedImage image = coverage.getRenderedImage();
@@ -703,7 +713,14 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         if (reference) {
             // 4) Transform the Geometry to Raster space
             Geometry rs = JTS.transform(geo, transform);
-            Geometry rsFilter = JTS.transform(geo.difference(originalGeo), transform);
+            
+            Geometry bufferedGeometry = geo;
+            if(soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
+                bufferedGeometry = geo.difference(originalGeo);
+            } else if (soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR) {
+                bufferedGeometry = geo.union(originalGeo);
+            }
+            Geometry rsFilter = JTS.transform(bufferedGeometry, transform);
             ROI roiGeo = new ROIGeometry(rs);
             ROI roiFilter = new ROIGeometry(rsFilter);
 

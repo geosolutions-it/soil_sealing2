@@ -144,7 +144,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
                         Geometry newRoi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
                         if (mask != null) {
-                            newRoi = newRoi.intersection(mask);
+                            newRoi = newRoi.difference(mask);
                         }
                         
                         if (roi == null) {
@@ -172,7 +172,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                         for (SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
                             Geometry newRoi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
                             if (mask != null) {
-                                newRoi = newRoi.intersection(mask);
+                                newRoi = newRoi.difference(mask);
                             }
                             
                             if (roi == null) {
@@ -304,7 +304,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
         if (hasPop) {
             Geometry roi = toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner,toRasterSpace);
             if (mask != null) {
-                roi = roi.intersection(mask);
+                roi = roi.difference(mask);
             }
             rois.add(roi);
         }
@@ -498,8 +498,10 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
         try {
             final JDBCDataStore ds = (JDBCDataStore) waterBodiesMaskReference.getStore().getDataStore(null);
             
-            ftReader = ds.getFeatureReader(Query.ALL, transaction);
-
+            Query query = new Query(waterBodiesMaskReference.getFeatureType().getName().getLocalPart(), Filter.INCLUDE);
+            
+            ftReader = ds.getFeatureReader(query, transaction);
+            
             while (ftReader.hasNext()) {
                 Feature feature = ftReader.next();
                 if (mask == null) {
@@ -507,7 +509,6 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 } else {
                     mask = mask.union((Geometry) feature.getDefaultGeometryProperty().getValue());
                 }
-                break;
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);

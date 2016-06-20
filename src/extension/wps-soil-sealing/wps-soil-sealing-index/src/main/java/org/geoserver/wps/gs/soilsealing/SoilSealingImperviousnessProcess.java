@@ -352,7 +352,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 mask = getWBodiesMask(waterBodiesMaskReference, mask);
                 
                 if (mask != null) {
-                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, toRasterSpace);
+                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
                 }
             }
             
@@ -397,7 +397,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     roi.setSRID(4326);
                     roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
                     if (mask != null) {
-                        roi = roi.intersection(mask);
+                        roi = roi.difference(mask);
                     }
                     rois.add(roi);
                 }

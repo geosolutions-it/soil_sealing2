@@ -206,7 +206,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                 mask = getWBodiesMask(waterBodiesMaskReference, mask);
                 
                 if (mask != null) {
-                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, true);
+                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
                 }
             }
             
@@ -251,7 +251,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                     roi.setSRID(4326);
                     roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, true);
                     if (mask != null) {
-                        roi = roi.intersection(mask);
+                        roi = roi.difference(mask);
                     }
                     rois.add(roi);
                 }

@@ -608,7 +608,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case NEW_URBANIZATION: // LABEL = "Simulate new urbanization", must be run after fragmentation?
         case NEW_ECO_CORRIDOR: // LABEL = "Simulate new ecological corridor", must be run after fragmentation?
             int i = 0; // fictitious year
-            ray_pixels = 10;// I should parameterize this
+
             for (int j = 0; j < n_adm_units; j++) {
                 // NOTE:
                 // This index should be run after fragmentation using one year!!

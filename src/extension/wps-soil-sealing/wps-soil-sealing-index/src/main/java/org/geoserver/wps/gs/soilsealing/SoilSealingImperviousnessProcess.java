@@ -375,7 +375,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                             (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
                               SoilSealingSubIndexType.translate(subIndex).getDescription() : 
                               subIndex+(radius>0?", "+radius+"m":"")
-                            ) : ""+(buffer>0?buffer+"m":""))));
+                            ) : (radius>0?"radius:"+radius+"m, ":"")+(buffer>0?"buffer:"+buffer+"m":""))));
             attributes.add(new FeatureAttribute("classes", ""));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));

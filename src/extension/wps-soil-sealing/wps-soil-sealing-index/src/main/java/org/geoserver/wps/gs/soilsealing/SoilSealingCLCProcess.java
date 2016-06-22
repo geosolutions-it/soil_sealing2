@@ -301,7 +301,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             }
             
             if (admUnits != null && !admUnits.isEmpty()) {
-                prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+                rois = prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
                         geoCodingReference, populationReference, municipalities, rois, populations,
                         referenceYear, currentYear, referenceCrs, true, mask);
             } else {
@@ -347,6 +347,11 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                 }
             }
 
+            // Sanity check on ROIs
+            if (rois == null || rois.isEmpty()) {
+                throw new RuntimeException("The list of selected geometries is EMPTY! Please chechùk your selection. If the problem persist, please contact the System Administrator.");
+            }
+            
             // read reference coverage
             GridCoverageReader referenceReader = ciReference.getGridCoverageReader(null, null);
             ParameterValueGroup readParametersDescriptor = referenceReader.getFormat()

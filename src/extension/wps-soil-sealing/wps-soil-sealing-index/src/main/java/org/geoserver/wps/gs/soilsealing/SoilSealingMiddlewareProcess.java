@@ -102,13 +102,14 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @param currentYear
      * @param referenceCrs
      * @param mask
+     * @return 
      * @throws IOException
      * @throws NoSuchAuthorityCodeException
      * @throws FactoryException
      * @throws TransformException
      * @throws NoninvertibleTransformException
      */
-    protected void prepareAdminROIs(Filter nowFilter, String admUnits,
+    protected List<Geometry> prepareAdminROIs(Filter nowFilter, String admUnits,
             AuSelectionType admUnitSelectionType, CoverageInfo ciReference,
             FeatureTypeInfo geoCodingReference, FeatureTypeInfo populationReference,
             List<String> municipalities, List<Geometry> rois, List<List<Integer>> populations,
@@ -240,6 +241,8 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 }
             }
         }
+        
+        return rois;
     }
 
     /**
@@ -438,6 +441,11 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
 
             rois.clear();
             rois.add(roiUnion);
+        }
+
+        // Sanity check on ROIs
+        if (union == null || union.isEmpty()) {
+            throw new RuntimeException("The list of selected geometries is EMPTY! Please chechùk your selection. If the problem persist, please contact the System Administrator.");
         }
 
         // Setting of the final srID and reproject to the final CRS

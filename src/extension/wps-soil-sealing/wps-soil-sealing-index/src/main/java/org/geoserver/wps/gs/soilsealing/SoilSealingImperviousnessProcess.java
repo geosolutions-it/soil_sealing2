@@ -330,16 +330,32 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     } else if (subIndex != null && subIndex.equalsIgnoreCase("rural")) {
                         rural = false;
                     }
+                    //boolean NEW_SCENARIO=false;
                     break;
                 case LAND_TAKE:
                 case POTENTIAL_LOSS_FOOD_SUPPLY:
                     toRasterSpace = true;
                     break;
+                case NEW_URBANIZATION:
+                case NEW_ECO_CORRIDOR:
+                    rural = true;
+                    //boolean NEW_SCENARIO=true;
+                    break;
                 default:
                     break;
             }
 
-         // //////////////////////////////////////////////////////////////////////
+            final Double buffer = (
+                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
+                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR? radius : 0.0);
+            final boolean mergeGeometries = 
+                    (soilSealingIndexType == SoilSealingIndexType.URBAN_DISPERSION || 
+                     soilSealingIndexType == SoilSealingIndexType.EDGE_DENSITY || 
+                     soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH || 
+                     soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY || 
+                     soilSealingIndexType == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT ? false : true);
+
+            // //////////////////////////////////////////////////////////////////////
             // Logging to WFS ...
             // //////////////////////////////////////////////////////////////////////
             /**
@@ -360,9 +376,9 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             attributes.add(new FeatureAttribute("subindex", 
                     (subIndex != null ? 
                             (SoilSealingSubIndexType.translate(subIndex) != SoilSealingSubIndexType.VOID ? 
-                                    SoilSealingSubIndexType.translate(subIndex).getDescription() : 
-                                    subIndex) : 
-                            "")+(radius>0?" "+radius+"m":"")));
+                              SoilSealingSubIndexType.translate(subIndex).getDescription() : 
+                              subIndex+(radius>0?", "+radius+"m":"")
+                            ) : ""+(buffer>0?buffer+"m":""))));
             attributes.add(new FeatureAttribute("classes", ""));
             attributes.add(new FeatureAttribute("admUnits", (admUnits != null ? admUnits : roi.toText())));
             attributes.add(new FeatureAttribute("admUnitSelectionType", admUnitSelectionType));
@@ -409,7 +425,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             }
             
             if (admUnits != null && !admUnits.isEmpty()) {
-                prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
+                rois = prepareAdminROIs(nowFilter, admUnits, admUnitSelectionType, ciReference,
                         geoCodingReference, populationReference, municipalities, rois, populations,
                         referenceYear, currentYear, referenceCrs, toRasterSpace, mask);
             } else {
@@ -455,6 +471,11 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 }
             }
 
+            // Sanity check on ROIs
+            if (rois == null || rois.isEmpty()) {
+                throw new RuntimeException("The list of selected geometries is EMPTY! Please chechùk your selection. If the problem persist, please contact the System Administrator.");
+            }
+
             LOGGER.fine(++gCount + ") " + java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()));
 
             // read reference coverage
@@ -472,17 +493,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             params = CoverageUtilities.replaceParameter(params, ImageMosaicFormat.USE_JAI_IMAGEREAD.getDefaultValue(), ImageMosaicFormat.USE_JAI_IMAGEREAD);
 
             // Creation of a GridGeometry object used for forcing the reader to
-            // read only the active zones
-            final Double buffer = (
-                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
-                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR? radius : 0.0);
-            final boolean mergeGeometries = 
-                    (soilSealingIndexType == SoilSealingIndexType.URBAN_DISPERSION || 
-                     soilSealingIndexType == SoilSealingIndexType.EDGE_DENSITY || 
-                     soilSealingIndexType == SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH || 
-                     soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY || 
-                     soilSealingIndexType == SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT ? false : true);
-            
+            // read only the active zones            
             final GridGeometry2D gridROI = createGridROI(ciReference, rois, toRasterSpace, referenceCrs, buffer, mergeGeometries);
 
             if (gridROI != null) {

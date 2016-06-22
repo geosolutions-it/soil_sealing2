@@ -1769,7 +1769,7 @@ public class CUDAClass {
      * @return
      */
     public static double[] fragmentation(List<CUDABean> beans, boolean rural, int RADIUS, int year,
-            int admin_unit) {
+            int admin_unit, boolean NEW_SCENARIO) {
         /**
          * Copyright 2015 Giuliano Langella: ---- working fine!! ----
          * 
@@ -1858,13 +1858,20 @@ public class CUDAClass {
             // sum_of_3_LINES
             CUfunction F_sum_of_3_LINES = new CUfunction();
             cuModuleGetFunction(F_sum_of_3_LINES, module, "_Z14sum_of_3_LINESPKdjjPdj");
+            
+            // LOAD MASK KERNEL ACCORDING TO WHICH PARENT IS CALLING
             // mask_twice
             CUfunction F_mask_twice = new CUfunction();
-            // -- ORIGINAL (both FRAG=0 & ROI=0 are set to zero in FRAG)
-            // cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
-            // -- NEW [to allow enhanced legend] (FRAG[ROI=0]=2, FRAG[FRAG=0]=0)
-            cuModuleGetFunction(F_mask_twice, module, "_Z13mask_twice__2PdPKhS1_jjd");
-
+            if(NEW_SCENARIO){
+                // filter once :: NEW urb./eco-corr.
+                cuModuleGetFunction(F_mask_twice, module, "_Z9mask_oncePdPKhS1_jjd");                
+            }else{
+                // -- ORIGINAL (both FRAG=0 & ROI=0 are set to zero in FRAG)
+                // cuModuleGetFunction(F_mask_twice, module, "_Z10mask_twicePdPKhS1_jjd");
+                // -- NEW [to allow enhanced legend] (FRAG[ROI=0]=2, FRAG[FRAG=0]=0)
+                cuModuleGetFunction(F_mask_twice, module, "_Z13mask_twice__2PdPKhS1_jjd");                
+            }
+            
             /*
              * DIM of ARRAYS in BYTES
              */
@@ -2642,6 +2649,7 @@ public class CUDAClass {
         int HEIGHT = beans.get(j).height;
         int map_len = WIDTH * HEIGHT;
         double[] result = new double[map_len];
+        boolean NEW_SCENARIO=true;
 
         // HERE I HAVE TO CREATE THE LAYER ACCOUNTING THE NEW URBANIZATION
         // IT IS ASSUMED THAT FRAGMENTATION IS RUN USING ONE YEAR, HENCE
@@ -2661,26 +2669,60 @@ public class CUDAClass {
         byte[] fictitious_refImage = beans.get(j).getReferenceImage();
         byte[] ROI = beans.get(j).roi;
 
-        for (int ii = 0; ii < map_len; ii++) {
-            if (urbanization) {
+        int roiPositiveAdd = 0;
+        int roiZeroAdd = 1;
+        
+        if (!urbanization) {
+            roiPositiveAdd = 0;
+            roiZeroAdd = -1;
+        }
+        
+        for (int ii = 0; ii < map_len; ii++) {//invertire il for con if per velocizzare
+            int filteredImagePixel = fictitious_refImage[ii] + (ROI[ii] > 0 ? roiPositiveAdd : roiZeroAdd);
+            filteredImagePixel = filteredImagePixel > 1 ? 1 : filteredImagePixel;
+            filteredImagePixel = filteredImagePixel < 0 ? 0 : filteredImagePixel;
+            fictitious_curImage[ii] = (byte) (filteredImagePixel);
+        }
+        
+        /*if (urbanization) {
+            for (int ii = 0; ii < map_len; ii++) {//invertire il for con if per velocizzare
                 fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 0 : 1));
-            } else {
+            }
+        } else {
+            for (int ii = 0; ii < map_len; ii++) {//invertire il for con if per velocizzare
                 fictitious_curImage[ii] = (byte) (fictitious_refImage[ii] + (ROI[ii] > 0 ? 1 : 0));
             }
-        }
+        }*/
         beans.get(j).setCurrentImage(fictitious_curImage);
 
+        if (SoilSealingTestUtils.TESTING) {
+            try {
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(
+                        beans.get(j).getReferenceCoverage().getEnvelope(), 
+                        beans.get(j).getReferenceCoverage(), 
+                        WIDTH, 
+                        HEIGHT, 
+                        fictitious_curImage, 
+                        DataBuffer.TYPE_BYTE, 
+                        "ssgci_ficticious");
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        
         // –Land Take–
         // final List<double[]> resultCuda = CUDAClass.land_take( beans, j );
         // result[j][i] = resultCuda.get(0);// MAP
 
         // –Fragmentation–
         i = 1;// I run fragmentation on fictitious current which is at current layer position!
-        boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
-        if (isFeasible)
-            result = CUDAClass.fragmentation(beans, rural, ray_pixels, i, j);
-        else
-            result = new double[] { Double.NaN };
+        //boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;// this check is useless if correctly wrote fictitious_curImage 
+        //if (isFeasible)
+            // we have to switch between rural/urban frag according to new urb/eco-corr
+            result = CUDAClass.fragmentation(beans, rural, ray_pixels, i, j, NEW_SCENARIO);
+        //else
+        //    result = new double[] { Double.NaN };
         return result;
     }
 

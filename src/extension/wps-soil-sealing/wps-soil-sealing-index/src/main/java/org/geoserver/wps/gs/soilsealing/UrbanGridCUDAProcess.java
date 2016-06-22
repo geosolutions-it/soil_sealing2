@@ -263,7 +263,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         // System.out.println( java.text.DateFormat.getDateTimeInstance().format(Calendar.getInstance().getTime()) );
         // long startTime = System.currentTimeMillis();
         /**
-         * Generalize: > isUrban = false/true ------------------------| > RADIUS [meters] = scalar ---------------------------------|
+         * Generalize:
+         *  > isUrban = false/true              ------------------------|
+         *  > RADIUS [meters] = scalar ---------------------------------|
          */
         Object output = null;
         try {
@@ -532,6 +534,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             }
             return result;
         case FRAGMENTATION: // FRAGMENTATION [myFragProg]
+            boolean NEW_SCENARIO=false;
             // double[][][] result = new double[n_adm_units][3][];
             /*
              * result = [admin(i)] [year=3] [maplen=HEIGHT(i)*WIDTH(i)]
@@ -542,7 +545,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 for (int i = 0; i < n_years; i++) { // launch for ref/curr/diff
                     boolean isFeasible = CUDAClass.SUT(beans, i, j) > 0;
                     if (isFeasible)
-                        result[j][i] = CUDAClass.fragmentation(beans, rural, ray_pixels, i, j);
+                        result[j][i] = CUDAClass.fragmentation(beans, rural, ray_pixels, i, j, NEW_SCENARIO);
                     else
                         result[j][i] = new double[] { Double.NaN };
                 }
@@ -605,6 +608,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         case NEW_URBANIZATION: // LABEL = "Simulate new urbanization", must be run after fragmentation?
         case NEW_ECO_CORRIDOR: // LABEL = "Simulate new ecological corridor", must be run after fragmentation?
             int i = 0; // fictitious year
+            ray_pixels = 10;// I should parameterize this
             for (int j = 0; j < n_adm_units; j++) {
                 // NOTE:
                 // This index should be run after fragmentation using one year!!
@@ -718,7 +722,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             if(soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION) {
                 bufferedGeometry = geo.difference(originalGeo);
             } else if (soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR) {
-                bufferedGeometry = geo.union(originalGeo);
+                bufferedGeometry = geo.difference(originalGeo);
             }
             Geometry rsFilter = JTS.transform(bufferedGeometry, transform);
             ROI roiGeo = new ROIGeometry(rs);
@@ -729,7 +733,26 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             bean.setRoi(roiData);
             bean.setRoiObj(roiGeo);
 
+            if (SoilSealingTestUtils.TESTING) {
+                SoilSealingTestUtils.storeGeometryAsWKT(
+                        bufferedGeometry, 
+                        "roiGeometry_" + soilSealingIndexType.getName(), 
+                        coverage.getCoordinateReferenceSystem()
+                );
+                
+                SoilSealingTestUtils.storeGeoTIFFSampleImage(
+                        JTS.bounds(bufferedGeometry, coverage.getCoordinateReferenceSystem()), 
+                        coverage, 
+                        image.getWidth(), 
+                        image.getHeight(), 
+                        roiData, 
+                        DataBuffer.TYPE_BYTE, 
+                        "roiData_" + soilSealingIndexType.getName());
+            }
+            
+            
             // 6) Setting the Coverage data array
+            bean.setReferenceCoverage(crop);
             bean.setReferenceImage(byteData);
 
             // 7) Setting the Image dimensions
@@ -739,11 +762,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             bean.setMinY(rectIMG.y);
         } else {
             // 6) Setting the Coverage data array
+            bean.setReferenceCoverage(crop);
             bean.setCurrentImage(byteData);
         }
-
-        // 7) Store the Reference Covergae containing the geospatial info
-        bean.setReferenceCoverage(coverage);
     }
 
     private byte[] getROIData(ROI roi, Rectangle rectIMG) {

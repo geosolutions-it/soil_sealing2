@@ -677,8 +677,6 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             CoordinateReferenceSystem geometryCrs = coverage.getCoordinateReferenceSystem();
             if (geo.getSRID() > 0) {
                 geometryCrs = CRS.decode("EPSG:"+geo.getSRID());
-                transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
-                geo = JTS.transform(geo, transform);
                 
                 // Apply Mask if necessary
                 Geometry mask = null;
@@ -697,7 +695,14 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                         geo = geo.difference(mask);
                     }
                 }
+                
+                transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
+                geo = JTS.transform(geo, transform);
+            } else {
+                LOGGER.log(Level.SEVERE, "Selected Geometries cannot be reprojected to the source data SRS!");
+                throw new RuntimeException("Selected Geometries cannot be reprojected to the source data SRS!");
             }
+            
             destinationEnvelope = JTS.getEnvelope2D(geo.getEnvelopeInternal(), geometryCrs);
         } catch (FactoryException e) {
             LOGGER.log(Level.SEVERE, "Selected Geometries cannot be reprojected to the source data SRS!", e);

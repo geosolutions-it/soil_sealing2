@@ -417,7 +417,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             // Apply Mask if necessary
             Geometry mask = null;
             if (waterBodiesMaskReference != null) {
-                mask = getWBodiesMask(waterBodiesMaskReference, mask);
+                mask = getWBodiesMask(waterBodiesMaskReference);
                 
                 if (mask != null) {
                     mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);

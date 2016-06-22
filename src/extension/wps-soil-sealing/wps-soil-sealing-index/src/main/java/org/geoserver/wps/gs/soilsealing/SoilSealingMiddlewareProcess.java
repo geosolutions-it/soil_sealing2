@@ -5,6 +5,7 @@ import java.awt.geom.NoninvertibleTransformException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -28,6 +29,7 @@ import org.geotools.process.gs.GSProcess;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.transform.AffineTransform2D;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
+import org.geotools.util.SoftValueHashMap;
 import org.geotools.util.logging.Logging;
 import org.opengis.feature.Feature;
 import org.opengis.feature.simple.SimpleFeature;
@@ -74,16 +76,25 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
     protected GeoServer geoserver;
 
     /**
+     * Caches the wbodies Geometries grabbed from the DataStore
+     */
+    static SoftValueHashMap<String, Geometry> waterBodiesMaskCache = new SoftValueHashMap<String, Geometry>(500);
+    private Geometry mask;
+
+    /**
      * Default Constructor
      * 
      * @param catalog
      * @param geoserver
      */
+    @SuppressWarnings("static-access")
     public SoilSealingMiddlewareProcess(Catalog catalog, GeoServer geoserver) {
         super();
 
         this.catalog = catalog;
         this.geoserver = geoserver;
+        
+        this.waterBodiesMaskCache.clear();
     }
 
     /**
@@ -499,37 +510,61 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
      * @return 
      * @throws IOException
      */
-    protected Geometry getWBodiesMask(FeatureTypeInfo waterBodiesMaskReference, Geometry mask)
+    @SuppressWarnings("static-access")
+    public synchronized Geometry getWBodiesMask(FeatureTypeInfo waterBodiesMaskReference)
             throws IOException {
-        FeatureReader<SimpleFeatureType, SimpleFeature> ftReader = null;
-        Transaction transaction = new DefaultTransaction();
-        try {
-            final JDBCDataStore ds = (JDBCDataStore) waterBodiesMaskReference.getStore().getDataStore(null);
-            
-            Query query = new Query(waterBodiesMaskReference.getFeatureType().getName().getLocalPart(), Filter.INCLUDE);
-            
-            ftReader = ds.getFeatureReader(query, transaction);
-            
-            while (ftReader.hasNext()) {
-                Feature feature = ftReader.next();
-                if (mask == null) {
-                    mask = (Geometry) feature.getDefaultGeometryProperty().getValue();
-                } else {
-                    mask = mask.union((Geometry) feature.getDefaultGeometryProperty().getValue());
+        
+        if (this.waterBodiesMaskCache.isEmpty()) {        
+            FeatureReader<SimpleFeatureType, SimpleFeature> ftReader = null;
+            Transaction transaction = new DefaultTransaction();
+            try {
+                final JDBCDataStore ds = (JDBCDataStore) waterBodiesMaskReference.getStore().getDataStore(null);
+                
+                Query query = new Query(waterBodiesMaskReference.getFeatureType().getName().getLocalPart(), Filter.INCLUDE);
+                
+                ftReader = ds.getFeatureReader(query, transaction);
+                
+                while (ftReader.hasNext()) {
+                    Feature feature = ftReader.next();
+                    final Geometry theGeom = (Geometry) feature.getDefaultGeometryProperty().getValue();
+                    if (mask == null) {
+                        mask = theGeom;
+                    } else {
+                        mask = mask.union(theGeom);
+                    }
+                    this.waterBodiesMaskCache.put(feature.getIdentifier().getID(), theGeom);
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);
+                mask = null;
+            } finally {
+                if (ftReader != null) {
+                    ftReader.close();
+                }
+    
+                transaction.commit();
+                transaction.close();
+            }
+        } else {
+            if (mask == null) {
+                for (Entry<String, Geometry> entry : this.waterBodiesMaskCache.entrySet()) {
+                    if (mask == null) {
+                        mask = entry.getValue();
+                    } else {
+                        mask = mask.union(entry.getValue());
+                    }                    
                 }
             }
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);
-            mask = null;
-        } finally {
-            if (ftReader != null) {
-                ftReader.close();
-            }
-
-            transaction.commit();
-            transaction.close();
         }
         
+        return (Geometry) mask.clone();
+    }
+
+    /**
+     * @return the mask
+     */
+    public Geometry getMask() {
         return mask;
     }
+
 }

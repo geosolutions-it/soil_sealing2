@@ -63,7 +63,8 @@ public class SoilSealingProcessingUtils {
      * Caches the wbodies Geometries grabbed from the DataStore
      */
     static SoftValueHashMap<String, List<Geometry>> waterBodiesMaskCache = new SoftValueHashMap<String, List<Geometry>>(2);
-    private static Geometry mask;
+    
+    static SoftValueHashMap<String, Geometry> masks;
 
     
     public SoilSealingProcessingUtils() {
@@ -94,17 +95,18 @@ public class SoilSealingProcessingUtils {
                 while (ftReader.hasNext()) {
                     Feature feature = ftReader.next();
                     final Geometry theGeom = (Geometry) feature.getDefaultGeometryProperty().getValue();
-                    if (mask == null) {
-                        mask = theGeom;
+                    if (!masks.containsKey(waterBodiesMaskReference.getName()) || masks.get(waterBodiesMaskReference.getName()) == null) {
+                        masks.put(waterBodiesMaskReference.getName(), theGeom);
                     } else {
-                        mask = mask.union(theGeom);
+                        Geometry mask = masks.get(waterBodiesMaskReference.getName());
+                        masks.put(waterBodiesMaskReference.getName(), mask.union(theGeom));
                     }
                     theGeoms.add(theGeom);
                 }
                 SoilSealingProcessingUtils.waterBodiesMaskCache.put(waterBodiesMaskReference.getName(), theGeoms);
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);
-                mask = null;
+                masks.remove(waterBodiesMaskReference.getName());
             } finally {
                 if (ftReader != null) {
                     ftReader.close();
@@ -114,23 +116,26 @@ public class SoilSealingProcessingUtils {
                 transaction.close();
             }
         } else {
-            for (Geometry theGeom : SoilSealingProcessingUtils.waterBodiesMaskCache.get(waterBodiesMaskReference.getName())) {
-                if (mask == null) {
-                    mask = (Geometry) theGeom.clone();
-                } else {
-                    mask = mask.union((Geometry) theGeom.clone());
-                }                    
+            if (!masks.containsKey(waterBodiesMaskReference.getName()) || masks.get(waterBodiesMaskReference.getName()) == null) {
+                for (Geometry theGeom : SoilSealingProcessingUtils.waterBodiesMaskCache.get(waterBodiesMaskReference.getName())) {
+                    if (!masks.containsKey(waterBodiesMaskReference.getName()) || masks.get(waterBodiesMaskReference.getName()) == null) {
+                        masks.put(waterBodiesMaskReference.getName(), theGeom);
+                    } else {
+                        Geometry mask = masks.get(waterBodiesMaskReference.getName());
+                        masks.put(waterBodiesMaskReference.getName(), mask.union(theGeom));
+                    }                    
+                }
             }
         }
         
-        return (Geometry) mask.clone();
+        return (Geometry) masks.get(waterBodiesMaskReference.getName()).clone();
     }
 
     /**
      * @return the mask
      */
-    public Geometry getMask() {
-        return mask;
+    public Geometry getMask(String waterBodiesMaskReference) {
+        return (Geometry) masks.get(waterBodiesMaskReference).clone();
     }
     
     /**

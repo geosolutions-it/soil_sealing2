@@ -660,14 +660,17 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         Geometry originalGeo = (Geometry) geo.clone();
         if (buffer > 0) {
             try {
-                if (!"EPSG:4326".equals(
-                        CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
+                final String crsIdentifier = CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false);
+                if (!"EPSG:4326".equals(crsIdentifier)) {
                     geo = geo.buffer(buffer);
+                    geo.setSRID(originalGeo.getSRID());
                 } else {
                     geo = geo.buffer(buffer / SoilSealingProcessingUtils.DEGREES_TO_METER_RATIO);
+                    geo.setSRID(originalGeo.getSRID());
                 }
             } catch (FactoryException e) {
                 geo = geo.buffer(buffer);
+                geo.setSRID(originalGeo.getSRID());
             }
         }
 

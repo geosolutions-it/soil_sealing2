@@ -15,4 +15,8 @@
 		<constructor-arg index="0" ref="catalog" />
 		<constructor-arg index="1" ref="geoServer" />
 	</bean>
+	
+	<!-- Others utilities -->
+	<bean id="soilSealingProcessingUtils" class="org.geoserver.wps.gs.soilsealing.SoilSealingProcessingUtils"/>
+	
 </beans>

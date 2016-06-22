@@ -5,9 +5,6 @@ import java.awt.geom.NoninvertibleTransformException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -16,27 +13,13 @@ import org.geoserver.config.GeoServer;
 import org.geoserver.wps.WPSException;
 import org.geoserver.wps.gs.soilsealing.SoilSealingAdministrativeUnit.AuSelectionType;
 import org.geotools.coverage.grid.GridGeometry2D;
-import org.geotools.data.DefaultTransaction;
-import org.geotools.data.FeatureReader;
-import org.geotools.data.Query;
-import org.geotools.data.Transaction;
-import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.geometry.Envelope2D;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.geometry.jts.ReferencedEnvelope;
-import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.process.gs.GSProcess;
 import org.geotools.referencing.CRS;
-import org.geotools.referencing.operation.transform.AffineTransform2D;
 import org.geotools.referencing.operation.transform.ProjectiveTransform;
-import org.geotools.util.SoftValueHashMap;
-import org.geotools.util.logging.Logging;
-import org.opengis.feature.Feature;
-import org.opengis.feature.simple.SimpleFeature;
-import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.filter.Filter;
-import org.opengis.filter.FilterFactory;
-import org.opengis.geometry.MismatchedDimensionException;
 import org.opengis.metadata.spatial.PixelOrientation;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.NoSuchAuthorityCodeException;
@@ -46,24 +29,9 @@ import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 
 import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.GeometryFactory;
-import com.vividsolutions.jts.geom.PrecisionModel;
-import com.vividsolutions.jts.simplify.DouglasPeuckerSimplifier;
 
 @SuppressWarnings("deprecation")
 public abstract class SoilSealingMiddlewareProcess implements GSProcess {
-
-    public static final int DEGREES_TO_METER_RATIO = 111128;
-    
-    private final static Logger LOGGER = Logging.getLogger(SoilSealingMiddlewareProcess.class);
-
-    /**
-     * Geometry and Filter Factories
-     */
-    protected static final FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
-
-    protected static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(
-            new PrecisionModel());
 
     /**
      * The GeoServer Catalog
@@ -76,25 +44,16 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
     protected GeoServer geoserver;
 
     /**
-     * Caches the wbodies Geometries grabbed from the DataStore
-     */
-    static SoftValueHashMap<String, Geometry> waterBodiesMaskCache = new SoftValueHashMap<String, Geometry>(500);
-    private Geometry mask;
-
-    /**
      * Default Constructor
      * 
      * @param catalog
      * @param geoserver
      */
-    @SuppressWarnings("static-access")
     public SoilSealingMiddlewareProcess(Catalog catalog, GeoServer geoserver) {
         super();
 
         this.catalog = catalog;
         this.geoserver = geoserver;
-        
-        this.waterBodiesMaskCache.clear();
     }
 
     /**
@@ -154,7 +113,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     break;
                 case DISTRICT:
                     for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
-                        Geometry newRoi = toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                        Geometry newRoi = SoilSealingProcessingUtils.toReferenceCRS(ssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
                         if (mask != null) {
                             newRoi = newRoi.difference(mask);
                         }
@@ -163,7 +122,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                             roi = newRoi;
                             srID = roi.getSRID();
                         } else {
-                            roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
+                            roi = SoilSealingProcessingUtils.GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
                         }
                         if (ssAu.getPopulation() != null) {
                             if (ssAu.getPopulation().get(referenceYear) != null)
@@ -182,7 +141,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                 case REGION:
                     for (SoilSealingAdministrativeUnit ssAu : sAu.getSubs()) {
                         for (SoilSealingAdministrativeUnit sssAu : ssAu.getSubs()) {
-                            Geometry newRoi = toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
+                            Geometry newRoi = SoilSealingProcessingUtils.toReferenceCRS(sssAu.getTheGeom(), referenceCrs, gridToWorldCorner, toRasterSpace);
                             if (mask != null) {
                                 newRoi = newRoi.difference(mask);
                             }
@@ -191,7 +150,7 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                                 roi = newRoi;
                                 srID = roi.getSRID();
                             } else {
-                                roi = GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
+                                roi = SoilSealingProcessingUtils.GEOMETRY_FACTORY.buildGeometry(Arrays.asList(roi, newRoi)).union();
                             }
                             
                             if (sssAu.getPopulation() != null) {
@@ -316,55 +275,13 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
             }
         }
         if (hasPop) {
-            Geometry roi = toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner,toRasterSpace);
+            Geometry roi = SoilSealingProcessingUtils.toReferenceCRS(sAu.getTheGeom(), referenceCrs, gridToWorldCorner,toRasterSpace);
             if (mask != null) {
                 roi = roi.difference(mask);
             }
             rois.add(roi);
         }
         return hasPop;
-    }
-
-    /**
-     * 
-     * @param theGeom
-     * @param referenceCrs
-     * @param gridToWorldCorner
-     * @return
-     * @throws NoSuchAuthorityCodeException
-     * @throws FactoryException
-     * @throws MismatchedDimensionException
-     * @throws TransformException
-     * @throws NoninvertibleTransformException
-     */
-    protected Geometry toReferenceCRS(Geometry theGeom, CoordinateReferenceSystem referenceCrs,
-            AffineTransform gridToWorldCorner, boolean toRasterSpace)
-            throws NoSuchAuthorityCodeException, FactoryException, MismatchedDimensionException,
-            TransformException, NoninvertibleTransformException {
-        // check if we need to reproject the ROI from WGS84 (standard in the input) to the reference CRS
-        if (theGeom.getSRID() <= 0)
-            theGeom.setSRID(CRS.lookupEpsgCode(referenceCrs, true));
-        final CoordinateReferenceSystem targetCrs = CRS.decode("EPSG:" + theGeom.getSRID(), true);
-        if (CRS.equalsIgnoreMetadata(referenceCrs, targetCrs)) {
-            Geometry rasterSpaceGeometry = JTS.transform(theGeom,
-                    new AffineTransform2D(gridToWorldCorner.createInverse()));
-            return (toRasterSpace ? DouglasPeuckerSimplifier.simplify(rasterSpaceGeometry, 1)
-                    : theGeom);
-        } else {
-            // reproject
-            MathTransform transform = CRS.findMathTransform(targetCrs, referenceCrs, true);
-            Geometry roiPrj;
-            if (transform.isIdentity()) {
-                roiPrj = theGeom;
-                roiPrj.setSRID(CRS.lookupEpsgCode(targetCrs, true));
-            } else {
-                roiPrj = JTS.transform(theGeom, transform);
-                roiPrj.setSRID(CRS.lookupEpsgCode(referenceCrs, true));
-            }
-            return (toRasterSpace
-                    ? JTS.transform(roiPrj, ProjectiveTransform.create(gridToWorldCorner).inverse())
-                    : roiPrj);
-        }
     }
 
     /**
@@ -427,9 +344,9 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
                     envelope.expandBy(buffer);
                     roiBuffer = roiUnion.buffer(buffer);
                 } else {
-                    envelope.expandBy(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
+                    envelope.expandBy(buffer / SoilSealingProcessingUtils.DEGREES_TO_METER_RATIO);
                     roiBuffer = roiUnion
-                            .buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
+                            .buffer(buffer / SoilSealingProcessingUtils.DEGREES_TO_METER_RATIO);
                 }
 
                 if (union == null) {
@@ -504,67 +421,4 @@ public abstract class SoilSealingMiddlewareProcess implements GSProcess {
         return gridROI;
     }
     
-    /**
-     * @param waterBodiesMaskReference
-     * @param mask
-     * @return 
-     * @throws IOException
-     */
-    @SuppressWarnings("static-access")
-    public synchronized Geometry getWBodiesMask(FeatureTypeInfo waterBodiesMaskReference)
-            throws IOException {
-        
-        if (this.waterBodiesMaskCache.isEmpty()) {        
-            FeatureReader<SimpleFeatureType, SimpleFeature> ftReader = null;
-            Transaction transaction = new DefaultTransaction();
-            try {
-                final JDBCDataStore ds = (JDBCDataStore) waterBodiesMaskReference.getStore().getDataStore(null);
-                
-                Query query = new Query(waterBodiesMaskReference.getFeatureType().getName().getLocalPart(), Filter.INCLUDE);
-                
-                ftReader = ds.getFeatureReader(query, transaction);
-                
-                while (ftReader.hasNext()) {
-                    Feature feature = ftReader.next();
-                    final Geometry theGeom = (Geometry) feature.getDefaultGeometryProperty().getValue();
-                    if (mask == null) {
-                        mask = theGeom;
-                    } else {
-                        mask = mask.union(theGeom);
-                    }
-                    this.waterBodiesMaskCache.put(feature.getIdentifier().getID(), theGeom);
-                }
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error while getting Water Bodies Mask Geometries.", e);
-                mask = null;
-            } finally {
-                if (ftReader != null) {
-                    ftReader.close();
-                }
-    
-                transaction.commit();
-                transaction.close();
-            }
-        } else {
-            if (mask == null) {
-                for (Entry<String, Geometry> entry : this.waterBodiesMaskCache.entrySet()) {
-                    if (mask == null) {
-                        mask = entry.getValue();
-                    } else {
-                        mask = mask.union(entry.getValue());
-                    }                    
-                }
-            }
-        }
-        
-        return (Geometry) mask.clone();
-    }
-
-    /**
-     * @return the mask
-     */
-    public Geometry getMask() {
-        return mask;
-    }
-
 }

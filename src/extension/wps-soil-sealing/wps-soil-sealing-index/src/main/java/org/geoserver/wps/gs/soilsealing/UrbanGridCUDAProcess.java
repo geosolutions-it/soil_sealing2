@@ -5,6 +5,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.NoninvertibleTransformException;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferByte;
@@ -114,7 +115,9 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
-            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius)
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
+            @DescribeParameter(name = "waterBodiesMaskReference", min = 0, description = "Name of the water bodies mask layer, optionally fully qualified (workspace:name)") FeatureTypeInfo waterBodiesMaskReference)
+   
             throws IOException {
 
         // Checks on the index 7 "Dispersive Urban Growth"
@@ -229,7 +232,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
                 // Populate it with Reference coverage parameters
                 try {
-                    populateBean(bean, true, referenceCoverage, geo, null, buffer, soilSealingIndexType);
+                    populateBean(bean, true, referenceCoverage, geo, null, buffer, soilSealingIndexType, waterBodiesMaskReference);
 
                     // Set the population values if needed
                     if (populations != null) {
@@ -239,7 +242,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
     
                     // Do the same for the Current Coverage if present
                     if (nowCoverage != null) {
-                        populateBean(bean, false, nowCoverage, geo, null, buffer, soilSealingIndexType);
+                        populateBean(bean, false, nowCoverage, geo, null, buffer, soilSealingIndexType, waterBodiesMaskReference);
                         // Set the population values if needed
                         if (populations != null) {
                             Integer popCur = populations.get(1).get(counter);
@@ -641,12 +644,14 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @param geo
      * @param transform
      * @param soilSealingIndexType 
+     * @param waterBodiesMaskReference 
      * @throws IOException
      * @throws MismatchedDimensionException
      * @throws TransformException
      */
     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
-            Geometry geo, MathTransform transform, int buffer, SoilSealingIndexType soilSealingIndexType)
+            Geometry geo, MathTransform transform, int buffer, SoilSealingIndexType soilSealingIndexType, 
+            FeatureTypeInfo waterBodiesMaskReference)
             throws IOException, MismatchedDimensionException, TransformException {
 
         RenderedImage image = coverage.getRenderedImage();
@@ -659,7 +664,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                         CRS.lookupIdentifier(coverage.getCoordinateReferenceSystem(), false))) {
                     geo = geo.buffer(buffer);
                 } else {
-                    geo = geo.buffer(buffer / SoilSealingMiddlewareProcess.DEGREES_TO_METER_RATIO);
+                    geo = geo.buffer(buffer / SoilSealingProcessingUtils.DEGREES_TO_METER_RATIO);
                 }
             } catch (FactoryException e) {
                 geo = geo.buffer(buffer);
@@ -674,6 +679,24 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
                 geometryCrs = CRS.decode("EPSG:"+geo.getSRID());
                 transform = CRS.findMathTransform(coverage.getCoordinateReferenceSystem(), geometryCrs, true);
                 geo = JTS.transform(geo, transform);
+                
+                // Apply Mask if necessary
+                Geometry mask = null;
+                if (waterBodiesMaskReference != null) {
+                    mask = SoilSealingProcessingUtils.getWBodiesMask(waterBodiesMaskReference);
+                    
+                    if (mask != null) {
+                        final AffineTransform gridToWorldCorner = 
+                                (AffineTransform) coverage.getGridGeometry().getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                        
+                        try {
+                            mask = SoilSealingProcessingUtils.toReferenceCRS(mask, geometryCrs, gridToWorldCorner, false);
+                        } catch (NoninvertibleTransformException e) {
+                            LOGGER.log(Level.WARNING, e.getMessage(), e);
+                        }
+                        geo = geo.difference(mask);
+                    }
+                }
             }
             destinationEnvelope = JTS.getEnvelope2D(geo.getEnvelopeInternal(), geometryCrs);
         } catch (FactoryException e) {

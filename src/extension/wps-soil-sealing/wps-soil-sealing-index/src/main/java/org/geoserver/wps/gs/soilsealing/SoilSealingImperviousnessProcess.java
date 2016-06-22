@@ -21,8 +21,6 @@ import java.util.logging.Logger;
 
 import javax.media.jai.RenderedOp;
 
-import net.sf.json.JSONSerializer;
-
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -73,6 +71,8 @@ import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.Polygon;
+
+import net.sf.json.JSONSerializer;
 
 /**
  * Middleware process collecting the inputs for {@link UrbanGridProcess} indexes.
@@ -398,7 +398,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             /**
              * LOG into the DB
              */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
             features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true, new NullProgressListener());
 
             if (features == null || features.isEmpty()) {
@@ -417,10 +417,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             // Apply Mask if necessary
             Geometry mask = null;
             if (waterBodiesMaskReference != null) {
-                mask = getWBodiesMask(waterBodiesMaskReference);
+                mask = SoilSealingProcessingUtils.getWBodiesMask(waterBodiesMaskReference);
                 
                 if (mask != null) {
-                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
+                    mask = SoilSealingProcessingUtils.toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
                 }
             }
             
@@ -440,7 +440,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         }
 
                         if (geomPolys.size() == 0) {
-                            roi = GEOMETRY_FACTORY.createPolygon(null, null);
+                            roi = SoilSealingProcessingUtils.GEOMETRY_FACTORY.createPolygon(null, null);
                         } else if (geomPolys.size() == 1) {
                             roi = geomPolys.get(0);
                         } else {
@@ -463,7 +463,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     }
                     
                     roi.setSRID(4326);
-                    roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
+                    roi = SoilSealingProcessingUtils.toReferenceCRS(roi, referenceCrs, gridToWorldCorner, toRasterSpace);
                     if (mask != null) {
                         roi = roi.difference(mask);
                     }
@@ -553,7 +553,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
-                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), 
+                        rural, 
+                        radius,
+                        waterBodiesMaskReference);
             } else {
                 final UrbanGridProcess urbanGridProcess = new UrbanGridProcess(imperviousnessReference, referenceYear, currentYear);
 
@@ -565,7 +568,10 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         Math.pow(pixelSize, 2), 
                         rois, 
                         populations,
-                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), rural, radius);
+                        (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), 
+                        rural, 
+                        radius,
+                        waterBodiesMaskReference);
             }
             long estimatedTime = System.currentTimeMillis() - startTime;
 
@@ -652,7 +658,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             /**
              * Update Feature Attributes and LOG into the DB
              */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
 
             SimpleFeature feature = SimpleFeatureBuilder.copy(features.subCollection(filter).toArray(new SimpleFeature[1])[0]);
 
@@ -686,7 +692,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                 /**
                  * Update Feature Attributes and LOG into the DB
                  */
-                filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+                filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
 
                 SimpleFeature feature = SimpleFeatureBuilder.copy(features.subCollection(filter).toArray(new SimpleFeature[1])[0]);
 
@@ -758,6 +764,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
      * @param defaultStyle
      * @return
      */
+    @SuppressWarnings("serial")
     private String[] buildRasterMap(SoilSealingDTO soilSealingIndexResult,
             List<StatisticContainer> indexValue, GridCoverage2D inputCov, String refWsName,
             String defaultStyle, final double nodata) {

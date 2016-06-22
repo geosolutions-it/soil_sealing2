@@ -185,7 +185,9 @@ public class UrbanGridProcess implements GSProcess {
             @DescribeParameter(name = "populations", min = 0, description = "Populations for each Area") List<List<Integer>> populations,
             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
-            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius)
+            @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
+            @DescribeParameter(name = "waterBodiesMaskReference", min = 0, description = "Name of the water bodies mask layer, optionally fully qualified (workspace:name)") FeatureTypeInfo waterBodiesMaskReference)
+    
             throws IOException {
 
         // Checks on the index 7 "Dispersive Urban Growth"

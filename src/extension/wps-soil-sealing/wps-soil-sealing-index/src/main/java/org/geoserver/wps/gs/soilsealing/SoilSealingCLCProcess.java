@@ -273,7 +273,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             /**
              * LOG into the DB
              */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
             features = wfsLogProcess.execute(features, typeName, wsName, storeName, filter, true,
                     new NullProgressListener());
 
@@ -293,10 +293,10 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // Apply Mask if necessary
             Geometry mask = null;
             if (waterBodiesMaskReference != null) {
-                mask = getWBodiesMask(waterBodiesMaskReference);
+                mask = SoilSealingProcessingUtils.getWBodiesMask(waterBodiesMaskReference);
                 
                 if (mask != null) {
-                    mask = toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
+                    mask = SoilSealingProcessingUtils.toReferenceCRS(mask, referenceCrs, gridToWorldCorner, false);
                 }
             }
             
@@ -316,7 +316,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                         }
 
                         if (geomPolys.size() == 0) {
-                            roi = GEOMETRY_FACTORY.createPolygon(null, null);
+                            roi = SoilSealingProcessingUtils.GEOMETRY_FACTORY.createPolygon(null, null);
                         } else if (geomPolys.size() == 1) {
                             roi = geomPolys.get(0);
                         } else {
@@ -339,7 +339,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                     }
                     
                     roi.setSRID(4326);
-                    roi = toReferenceCRS(roi, referenceCrs, gridToWorldCorner, true);
+                    roi = SoilSealingProcessingUtils.toReferenceCRS(roi, referenceCrs, gridToWorldCorner, true);
                     if (mask != null) {
                         roi = roi.difference(mask);
                     }
@@ -508,7 +508,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             /**
              * Update Feature Attributes and LOG into the DB
              */
-            filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+            filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
 
             SimpleFeature feature = SimpleFeatureBuilder.copy(features.subCollection(filter).toArray(new SimpleFeature[1])[0]);
 
@@ -537,7 +537,7 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
                 /**
                  * Update Feature Attributes and LOG into the DB
                  */
-                filter = ff.equals(ff.property("ftUUID"), ff.literal(uuid.toString()));
+                filter = SoilSealingProcessingUtils.ff.equals(SoilSealingProcessingUtils.ff.property("ftUUID"), SoilSealingProcessingUtils.ff.literal(uuid.toString()));
 
                 SimpleFeature feature = SimpleFeatureBuilder
                         .copy(features.subCollection(filter).toArray(new SimpleFeature[1])[0]);

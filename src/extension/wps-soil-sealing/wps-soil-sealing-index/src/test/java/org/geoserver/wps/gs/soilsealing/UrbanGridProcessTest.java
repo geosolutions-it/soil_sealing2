@@ -213,7 +213,7 @@ public class UrbanGridProcessTest {
     public void testIndex5() throws IOException {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.URBAN_DISPERSION, null, null, geomListUtm32N, null, null,
-                false, 100, null);
+                false, 100, 100, null);
 
         // Expected results
         double sut = totalAreaRef;
@@ -229,7 +229,7 @@ public class UrbanGridProcessTest {
     public void testIndex5img2() throws IOException {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.URBAN_DISPERSION, null, null, geomListUtm32N, null, null,
-                false, 100, null);
+                false, 100, 100, null);
 
         // Expected results Reference
         double sutRef = totalAreaRef;
@@ -254,7 +254,7 @@ public class UrbanGridProcessTest {
     public void testIndex6() throws Exception {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.EDGE_DENSITY, null, null, geomListUtm32N, null, null, false,
-                100, null);
+                100, 100, null);
         // Expected Result Reference
         Geometry geoRpj = reprojectToEqualArea(crs, geomListUtm32N.get(0));
         double adminArea = geoRpj.getArea() * converter;
@@ -269,7 +269,7 @@ public class UrbanGridProcessTest {
     public void testIndex6img2() throws Exception {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.EDGE_DENSITY, null, null, geomListUtm32N, null, null, false,
-                100, null);
+                100, 100, null);
         // Expected Result Reference
         Geometry geoRpj = reprojectToEqualArea(crs, geomListUtm32N.get(0));
         double adminArea = geoRpj.getArea() * converter;
@@ -292,7 +292,7 @@ public class UrbanGridProcessTest {
         // Index 7a
         List<StatisticContainer> resultsA = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH, SoilSealingSubIndexType.URBAN_AREA,
-                1d, geomListRaster, null, null, false, 100, null);
+                1d, geomListRaster, null, null, false, 100, 100, null);
 
         double expectedRefA = totalAreaRef / rasterGeoArea * 100;
 
@@ -305,7 +305,7 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> resultsB = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH,
                 SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO, 1d, geomListUtm32N, null, null,
-                false, 100, null);
+                false, 100, 100, null);
 
         double polyMaxArea = areasRef.get(areasRef.size() - 1);
 
@@ -318,7 +318,7 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> resultsC = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH,
                 SoilSealingSubIndexType.OTHER_POLYGONS_RATIO, 1d, geomListUtm32N, null, null, false,
-                100, null);
+                100, 100, null);
 
         double polyAreaNotMax = totalAreaRef - polyMaxArea;
 
@@ -334,7 +334,7 @@ public class UrbanGridProcessTest {
         // Index 7a
         List<StatisticContainer> resultsA = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH, SoilSealingSubIndexType.URBAN_AREA,
-                1d, geomListRaster, null, null, false, 100, null);
+                1d, geomListRaster, null, null, false, 100, 100, null);
         // reference
         double expectedRefA = totalAreaRef / rasterGeoArea * 100;
 
@@ -354,7 +354,7 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> resultsB = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH,
                 SoilSealingSubIndexType.HIGHEST_POLYGON_RATIO, 1d, geomListUtm32N, null, null,
-                false, 100, null);
+                false, 100, 100, null);
         // reference
         double polyMaxAreaRef = areasRef.get(areasRef.size() - 1);
 
@@ -377,7 +377,7 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> resultsC = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH,
                 SoilSealingSubIndexType.OTHER_POLYGONS_RATIO, 1d, geomListUtm32N, null, null, false,
-                100, null);
+                100, 100, null);
 
         // reference
         double polyAreaNotMaxRef = totalAreaRef - polyMaxAreaRef;
@@ -408,7 +408,7 @@ public class UrbanGridProcessTest {
 
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.FRAGMENTATION, null, pixelArea, geomListRaster, null, null,
-                false, 100, null);
+                false, 100, 100, null);
 
         List<ROI> rois = new ArrayList<ROI>(geomListRaster.size());
 
@@ -450,7 +450,7 @@ public class UrbanGridProcessTest {
 
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.FRAGMENTATION, null, pixelArea, geomListRaster, null, null,
-                false, 100, null);
+                false, 100, 100, null);
 
         RenderedImage referenceCalculated = results.get(0).getReferenceImage();
         RenderedImage currentCalculated = results.get(0).getNowImage();
@@ -515,7 +515,7 @@ public class UrbanGridProcessTest {
     public void testIndex9() throws IOException {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.LAND_TAKE, null, 1d, geomListRaster, populations, null, false,
-                100, null);
+                100, 100, null);
 
         double areaDiff = totalAreaCur - totalAreaRef;
         double deltaPop = DEFAULT_POP_NOW - DEFAULT_POP_REF;
@@ -531,7 +531,7 @@ public class UrbanGridProcessTest {
     public void testIndex10() throws IOException {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, nowCoverage,
                 SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY, null, 1d, geomListRaster,
-                populations, multiplier, false, 100, null);
+                populations, multiplier, false, 100, 100, null);
 
         double areaDiff = totalAreaCur - totalAreaRef;
         double deltaPop = DEFAULT_POP_NOW - DEFAULT_POP_REF;
@@ -548,7 +548,7 @@ public class UrbanGridProcessTest {
     public void testNoCoverages() throws IOException {
         List<StatisticContainer> results = urbanProcess.execute(null, null,
                 SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY, null, 1d, geomListRaster,
-                populations, multiplier, false, 100, null);
+                populations, multiplier, false, 100, 100, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -556,7 +556,7 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.DISPERSIVE_URBAN_GROWTH,
                 SoilSealingSubIndexType.translate("d"), 1d, geomListRaster, populations, multiplier,
-                false, 100, null);
+                false, 100, 100, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -564,14 +564,14 @@ public class UrbanGridProcessTest {
         List<StatisticContainer> results = urbanProcess.execute(referenceCoverage, null,
                 SoilSealingIndexType.MODEL_URBAN_DEVELOPMENT,
                 SoilSealingSubIndexType.translate("d"), 1d, geomListRaster, populations, multiplier,
-                false, 100, null);
+                false, 100, 100, null);
     }
 
     @Test(expected = ProcessException.class)
     public void testNoDatastore() throws IOException {
         List<StatisticContainer> results = new UrbanGridProcess(refShp, curShp).execute(
                 referenceCoverage, null, SoilSealingIndexType.URBAN_DISPERSION, null, 1d,
-                geomListUtm32N, null, null, false, 100, null);
+                geomListUtm32N, null, null, false, 100, 100, null);
     }
 
     @AfterClass

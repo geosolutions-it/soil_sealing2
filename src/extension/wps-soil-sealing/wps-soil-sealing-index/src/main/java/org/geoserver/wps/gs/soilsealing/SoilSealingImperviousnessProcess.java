@@ -242,6 +242,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
             @DescribeParameter(name = "admUnitSelectionType", min = 0, description = "Administrative Units Slection Type") AuSelectionType admUnitSelectionType,
             @DescribeParameter(name = "ROI", min = 0, description = "Region Of Interest") Geometry roi,
             @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
+            @DescribeParameter(name = "buffer", min = 0, description = "Radius in meters") double buffer,
             @DescribeParameter(name = "pixelSize", min = 0, description = "Pixel Size") double pixelSize,
             @DescribeParameter(name = "jcuda", min = 0, description = "Boolean value indicating if indexes must be calculated using CUDA", defaultValue = "false") Boolean jcuda,
             @DescribeParameter(name = "jobUid", description = "Name of the user running the Job") String jobUid)
@@ -344,9 +345,6 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                     break;
             }
 
-            final Double buffer = (
-                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
-                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR? radius : 0.0);
             final boolean mergeGeometries = 
                     (soilSealingIndexType == SoilSealingIndexType.URBAN_DISPERSION || 
                      soilSealingIndexType == SoilSealingIndexType.EDGE_DENSITY || 
@@ -555,6 +553,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), 
                         rural, 
                         radius,
+                        buffer,
                         waterBodiesMaskReference);
             } else {
                 final UrbanGridProcess urbanGridProcess = new UrbanGridProcess(imperviousnessReference, referenceYear, currentYear);
@@ -570,6 +569,7 @@ public class SoilSealingImperviousnessProcess extends SoilSealingMiddlewareProce
                         (soilSealingIndexType == SoilSealingIndexType.POTENTIAL_LOSS_FOOD_SUPPLY ? INDEX_10_VALUE : null), 
                         rural, 
                         radius,
+                        buffer,
                         waterBodiesMaskReference);
             }
             long estimatedTime = System.currentTimeMillis() - startTime;

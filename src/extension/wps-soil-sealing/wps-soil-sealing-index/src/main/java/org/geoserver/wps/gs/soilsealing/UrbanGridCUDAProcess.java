@@ -115,6 +115,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
             @DescribeParameter(name = "coefficient", min = 0, description = "Multiplier coefficient for index 10") Double coeff,
             @DescribeParameter(name = "rural", min = 0, description = "Rural or Urban index") boolean rural,
             @DescribeParameter(name = "radius", min = 0, description = "Radius in meters") int radius,
+            @DescribeParameter(name = "buffer", min = 0, description = "Radius in meters") double buffer,
             @DescribeParameter(name = "waterBodiesMaskReference", min = 0, description = "Name of the water bodies mask layer, optionally fully qualified (workspace:name)") FeatureTypeInfo waterBodiesMaskReference)
    
             throws IOException {
@@ -221,9 +222,6 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
         try {
             // MathTransform transform = ProjectiveTransform.create(gridToWorldCorner).inverse();
             int counter = 0;
-            int buffer = (
-                    soilSealingIndexType == SoilSealingIndexType.NEW_URBANIZATION || 
-                    soilSealingIndexType == SoilSealingIndexType.NEW_ECO_CORRIDOR ? radius : 0);
             for (Geometry geo : geoms) {
                 // Create the CUDABean object
                 CUDABean bean = new CUDABean();
@@ -649,7 +647,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
      * @throws TransformException
      */
     private void populateBean(CUDABean bean, boolean reference, GridCoverage2D coverage,
-            Geometry geo, MathTransform transform, int buffer, SoilSealingIndexType soilSealingIndexType, 
+            Geometry geo, MathTransform transform, double buffer, SoilSealingIndexType soilSealingIndexType, 
             FeatureTypeInfo waterBodiesMaskReference)
             throws IOException, MismatchedDimensionException, TransformException {
 

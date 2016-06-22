@@ -49,7 +49,7 @@ import com.vividsolutions.jts.geom.Geometry;
  * 
  */
 @SuppressWarnings("deprecation")
-public class CLCProcess implements GSProcess {
+public class CLCCUDAProcess implements GSProcess {
     /** Constant associated to the 0th idx */
     private static final int ZERO_IDX = 0;
 
@@ -79,7 +79,7 @@ public class CLCProcess implements GSProcess {
     // HP2 = Coverages already cropped
 
     @SuppressWarnings("unchecked")
-    @DescribeResult(name = "CLCprocess", description = "CLC indexes", type = List.class)
+    @DescribeResult(name = "CLCCUDAprocess", description = "CLC CUDA indexes", type = List.class)
     public List<StatisticContainer> execute(
             @DescribeParameter(name = "reference", description = "Name of the reference raster") GridCoverage2D referenceCoverage,
             @DescribeParameter(name = "now", description = "Name of the new raster") GridCoverage2D nowCoverage,
@@ -235,6 +235,9 @@ public class CLCProcess implements GSProcess {
         List<StatisticContainer> container = new ArrayList<StatisticContainer>(numAreas);
 
         // Selection of the statistics for each Zone
+        
+        // CUDA Class here...
+        
         switch (soilSealingIndexType) {
             case COVERAGE_COEFFICIENT:
                 // Elaboration for a 2-band image
@@ -242,11 +245,11 @@ public class CLCProcess implements GSProcess {
                     // For each Geometry
                     for (ZoneGeometry zone : results) {
                         // extraction of the statistics
-                        double[][] coeffCop = calculateCoeffCop(classes, bands, zone, area, percentual);
+                        double[][] coeffCop = calculateCoeffCop(classes, bands, zone, area, percentual);// HERE
                         // Geometry associated
                         Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
                         // Variation array
-                        double[] coeffVariation = calculateVariation(numClass, coeffCop, percentual);
+                        double[] coeffVariation = calculateVariation(numClass, coeffCop, percentual);// HERE
                         // Object used for storing the index results
                         StatisticContainer statisticContainer = new StatisticContainer(geo,
                                 coeffCop[ZERO_IDX], coeffCop[1], null);
@@ -259,7 +262,7 @@ public class CLCProcess implements GSProcess {
                     for (ZoneGeometry zone : results) {
                         // extraction of the statistics
                         double[] coeffCop = calculateCoeffCop(classes, bands, zone, area,
-                                percentual)[ZERO_IDX];
+                                percentual)[ZERO_IDX]; // HERE
                         // Geometry associated
                         Geometry geo = ((ROIGeometry) zone.getROI()).getAsGeometry();
                         // Addition of the Statistics to a List

@@ -21,6 +21,8 @@ import java.util.logging.Logger;
 
 import javax.media.jai.RenderedOp;
 
+import net.sf.json.JSONSerializer;
+
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
@@ -31,7 +33,6 @@ import org.geoserver.wps.WPSException;
 import org.geoserver.wps.gs.ImportProcess;
 import org.geoserver.wps.gs.ToFeature;
 import org.geoserver.wps.gs.WFSLog;
-import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
 import org.geoserver.wps.gs.soilsealing.SoilSealingAdministrativeUnit.AuSelectionType;
 import org.geoserver.wps.gs.soilsealing.model.SoilSealingIndex;
 import org.geoserver.wps.gs.soilsealing.model.SoilSealingOutput;
@@ -71,8 +72,6 @@ import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.Polygon;
-
-import net.sf.json.JSONSerializer;
 
 /**
  * Middleware process collecting the inputs for {@link UrbanGridProcess} indexes.

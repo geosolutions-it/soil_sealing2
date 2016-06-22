@@ -2610,15 +2610,19 @@ public class CUDAClass {
 
         double[] LTAKE_count = res_LT.get(1);// account in hectares
         /*
-         * ----------------------------- (N) (BIN2,BIN1) --> (LTAKE) ----------------------------- (1) (0,0) --> +0 ---> nothing changed in rural
-         * pixels LTAKE_count[0] (2) (0,1) --> -1 ---> increase of rural pixels LTAKE_count[1] (3) (1,0) --> +1 ---> increase of urban pixels
-         * LTAKE_count[2] (4) (1,1) --> -0 ---> nothing changed in urban pixels LTAKE_count[3] -----------------------------
+         * -----------------------------
+         * (N) (BIN2,BIN1) --> (LTAKE) 
+         * -----------------------------
+         * (1) (0,0) --> +0 ---> nothing changed in rural pixels LTAKE_count[0]
+         * (2) (0,1) --> -1 ---> increase of rural pixels        LTAKE_count[1]
+         * (3) (1,0) --> +1 ---> increase of urban pixels        LTAKE_count[2] 
+         * (4) (1,1) --> -0 ---> nothing changed in urban pixels LTAKE_count[3]
+         * -----------------------------
          */
 
         // ( [ha] - [ha] ) * [persons * year-1 * ha-1] ––> [persons * year-1]
-        double wheatLoss = (LTAKE_count[2] - LTAKE_count[1]) * fedPersons;// [persons
-                                                                          // *
-                                                                          // year-1]
+        double wheatLoss = (LTAKE_count[2] - LTAKE_count[1]) * fedPersons;
+        
         /*
          * wheatLoss > 0 ––> loss of wheat supply wheatLoss = 0 ––> unchanged wheat supply wheatLoss < 0 ––> gain of wheat supply
          */

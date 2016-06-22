@@ -68,7 +68,7 @@ import com.vividsolutions.jts.geom.Geometry;
 public class SoilSealingTestUtils {
 
     /** Set whether the superuser is performing a test a (cuda) codes to calculate GUI indices */
-    public final static boolean TESTING = true;
+    public final static boolean TESTING = false;
 
     public final static String TESTING_DIR = "/media/DATI/db-backup/ssgci-data/testing";// "/opt/soil_sealing/exchange_data/testing";
 

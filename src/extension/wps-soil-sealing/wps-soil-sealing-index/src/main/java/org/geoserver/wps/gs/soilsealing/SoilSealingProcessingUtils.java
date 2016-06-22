@@ -64,7 +64,7 @@ public class SoilSealingProcessingUtils {
      */
     static SoftValueHashMap<String, List<Geometry>> waterBodiesMaskCache = new SoftValueHashMap<String, List<Geometry>>(2);
     
-    static SoftValueHashMap<String, Geometry> masks;
+    static SoftValueHashMap<String, Geometry> masks = new SoftValueHashMap<String, Geometry>(2);
 
     
     public SoilSealingProcessingUtils() {

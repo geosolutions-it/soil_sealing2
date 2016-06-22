@@ -32,7 +32,6 @@ import javax.media.jai.operator.LookupDescriptor;
 import javax.media.jai.operator.MosaicDescriptor;
 
 import org.geoserver.catalog.FeatureTypeInfo;
-import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
 import org.geotools.coverage.grid.GridCoverage2D;
@@ -289,7 +288,7 @@ public class UrbanGridCUDAProcess extends UrbanGridProcess implements GSProcess 
 
             LOGGER.fine("rural=" + rural + " -- radius/buffer=" + radius + " [m]");
 
-            List<StatisticContainer> results = new ArrayList<CLCProcess.StatisticContainer>();
+            List<StatisticContainer> results = new ArrayList<StatisticContainer>();
             StatisticContainer stats = new StatisticContainer();
             double[][][] images = (double[][][]) output;
 

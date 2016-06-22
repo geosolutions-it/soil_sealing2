@@ -20,6 +20,8 @@ import java.util.logging.Logger;
 
 import javax.media.jai.RenderedOp;
 
+import net.sf.json.JSONSerializer;
+
 import org.geoserver.catalog.Catalog;
 import org.geoserver.catalog.CoverageInfo;
 import org.geoserver.catalog.FeatureTypeInfo;
@@ -29,7 +31,6 @@ import org.geoserver.wps.WPSException;
 import org.geoserver.wps.gs.ImportProcess;
 import org.geoserver.wps.gs.ToFeature;
 import org.geoserver.wps.gs.WFSLog;
-import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
 import org.geoserver.wps.gs.soilsealing.SoilSealingAdministrativeUnit.AuSelectionType;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
@@ -77,8 +78,6 @@ import com.vividsolutions.jts.geom.GeometryCollection;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.MultiPolygon;
 import com.vividsolutions.jts.geom.Polygon;
-
-import net.sf.json.JSONSerializer;
 
 /**
  * Middleware process collecting the inputs for {@link CLCProcess} indexes.
@@ -416,26 +415,50 @@ public class SoilSealingCLCProcess extends SoilSealingMiddlewareProcess {
             // ///////////////////////////////////////////////////////////////
             // Calling CLCProcess
             // ///////////////////////////////////////////////////////////////
-            final CLCProcess clcProcess = new CLCProcess();
+            List<StatisticContainer> indexValue = new ArrayList<StatisticContainer>();
+            
+            // CUDA PROCESS
+            long startTime = System.currentTimeMillis();
+            if (jcuda != null && jcuda) {
+                
+                // QUI
+                final CLCCUDAProcess clcCudaProcess = new CLCCUDAProcess();
 
-            /*
-             * LOGGER.finer( "Invocking the CLCProcess with the following parameters: "); LOGGER.finer(" --> referenceCoverage: " +
-             * referenceCoverage); LOGGER.finer(" --> nowCoverage: " + nowCoverage); LOGGER.finer(" --> classes: " + classes); LOGGER.finer(
-             * " --> index: " + index); LOGGER.finer(" --> rois(" + rois.size() + ")"); LOGGER.finer(" --> populations(" + populations.size() + ")");
-             */
 
-            List<StatisticContainer> indexValue = 
-                    clcProcess.execute(
-                            referenceCoverage, 
-                            nowCoverage, 
-                            classes, 
-                            SoilSealingIndexType.translateIndex(index), 
-                            Math.pow(pixelSize, 2), 
-                            rois, 
-                            populations, 
-                            null, 
-                            (SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.MARGINAL_LAND_TAKE && SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.URBAN_SPRAWL));
+                indexValue = 
+                        clcCudaProcess.execute(
+                                referenceCoverage, 
+                                nowCoverage, 
+                                classes, 
+                                SoilSealingIndexType.translateIndex(index), 
+                                Math.pow(pixelSize, 2), 
+                                rois, 
+                                populations, 
+                                null, 
+                                (SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.MARGINAL_LAND_TAKE && SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.URBAN_SPRAWL));
+            } else {
+                final CLCProcess clcProcess = new CLCProcess();
 
+                /*
+                 * LOGGER.finer( "Invocking the CLCProcess with the following parameters: "); LOGGER.finer(" --> referenceCoverage: " +
+                 * referenceCoverage); LOGGER.finer(" --> nowCoverage: " + nowCoverage); LOGGER.finer(" --> classes: " + classes); LOGGER.finer(
+                 * " --> index: " + index); LOGGER.finer(" --> rois(" + rois.size() + ")"); LOGGER.finer(" --> populations(" + populations.size() + ")");
+                 */
+
+                indexValue = 
+                        clcProcess.execute(
+                                referenceCoverage, 
+                                nowCoverage, 
+                                classes, 
+                                SoilSealingIndexType.translateIndex(index), 
+                                Math.pow(pixelSize, 2), 
+                                rois, 
+                                populations, 
+                                null, 
+                                (SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.MARGINAL_LAND_TAKE && SoilSealingIndexType.translateIndex(index) != SoilSealingIndexType.URBAN_SPRAWL));
+                
+            }
+            
             // ///////////////////////////////////////////////////////////////
             // Preparing the Output Object which will be JSON encoded
             // ///////////////////////////////////////////////////////////////

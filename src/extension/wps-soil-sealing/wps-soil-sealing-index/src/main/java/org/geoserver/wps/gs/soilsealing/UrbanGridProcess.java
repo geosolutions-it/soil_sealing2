@@ -4,6 +4,14 @@
  */
 package org.geoserver.wps.gs.soilsealing;
 
+import it.geosolutions.jaiext.algebra.AlgebraCRIF;
+import it.geosolutions.jaiext.algebra.AlgebraDescriptor;
+import it.geosolutions.jaiext.algebra.AlgebraDescriptor.Operator;
+import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
+import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
+import it.geosolutions.jaiext.buffer.BufferDescriptor;
+import it.geosolutions.jaiext.buffer.BufferRIF;
+
 import java.awt.RenderingHints;
 import java.awt.image.DataBuffer;
 import java.awt.image.RenderedImage;
@@ -28,7 +36,6 @@ import javax.media.jai.RenderedOp;
 import javax.media.jai.operator.BandSelectDescriptor;
 
 import org.geoserver.catalog.FeatureTypeInfo;
-import org.geoserver.wps.gs.soilsealing.CLCProcess.StatisticContainer;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingIndexType;
 import org.geoserver.wps.gs.soilsealing.SoilSealingImperviousnessProcess.SoilSealingSubIndexType;
 import org.geotools.coverage.grid.GridCoverage2D;
@@ -62,14 +69,6 @@ import org.opengis.referencing.operation.TransformException;
 
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.Point;
-
-import it.geosolutions.jaiext.algebra.AlgebraCRIF;
-import it.geosolutions.jaiext.algebra.AlgebraDescriptor;
-import it.geosolutions.jaiext.algebra.AlgebraDescriptor.Operator;
-import it.geosolutions.jaiext.bandmerge.BandMergeCRIF;
-import it.geosolutions.jaiext.bandmerge.BandMergeDescriptor;
-import it.geosolutions.jaiext.buffer.BufferDescriptor;
-import it.geosolutions.jaiext.buffer.BufferRIF;
 
 /**
  * This process calculates various indexes on the UrbanGrids. Indexes 5-6-7b-7c are calculated using Urban Grids as polygons. The other indexes are
